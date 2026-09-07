@@ -1,0 +1,125 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=Be+Vietnam+Pro:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  *, *::before, *::after { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    @apply font-sans antialiased text-gray-900 bg-gray-50;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { @apply no-underline; }
+  button, input, select, textarea { font: inherit; }
+}
+
+@layer components {
+  /* ---- Buttons ---- */
+  .btn {
+    @apply inline-flex items-center justify-center gap-2 px-5 py-2 rounded-lg
+           text-sm font-medium cursor-pointer border border-transparent
+           transition-all duration-150 whitespace-nowrap select-none
+           focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-offset-2
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+  .btn-primary   { @apply bg-primary text-white hover:bg-primary-700 focus-visible:ring-primary; }
+  .btn-secondary { @apply bg-secondary text-white hover:bg-secondary-dark; }
+  .btn-outline   { @apply bg-transparent text-primary border-primary hover:bg-primary-50; }
+  .btn-ghost     { @apply bg-transparent text-gray-500 hover:bg-gray-100 hover:text-gray-900; }
+  .btn-danger    { @apply bg-red-500 text-white hover:bg-red-600; }
+  .btn-warning   { @apply bg-amber-500 text-white hover:bg-amber-600; }
+  .btn-success   { @apply bg-emerald-500 text-white hover:bg-emerald-600; }
+  .btn-sm        { @apply px-3 py-1 text-xs rounded; }
+  .btn-lg        { @apply px-8 py-3 text-lg rounded-xl; }
+  .btn-xl        { @apply px-10 py-4 text-2xl font-bold rounded-2xl; }
+  .btn-icon      { @apply w-9 h-9 p-0; }
+
+  /* ---- Cards ---- */
+  .card {
+    @apply bg-white rounded-xl shadow-card overflow-hidden;
+  }
+  .card-header {
+    @apply px-6 py-4 border-b border-gray-100 flex items-center justify-between gap-4;
+  }
+  .card-title  { @apply text-lg font-semibold text-gray-900 flex items-center gap-2; }
+  .card-body   { @apply p-6; }
+  .card-footer { @apply px-6 py-3 border-t border-gray-100 bg-gray-50; }
+
+  /* ---- Form Controls ---- */
+  .form-group  { @apply flex flex-col gap-1.5; }
+  .form-label  { @apply text-sm font-medium text-gray-700; }
+  .form-hint   { @apply text-xs text-gray-400; }
+  .form-control {
+    @apply w-full px-3 py-2 border border-gray-200 rounded-lg bg-white text-sm
+           text-gray-900 placeholder-gray-400 transition-colors
+           hover:border-gray-300
+           focus:outline-none focus:border-primary-600 focus:ring-2 focus:ring-primary-600/10;
+  }
+  .form-control.is-error {
+    @apply border-red-400 focus:border-red-400 focus:ring-red-400/10;
+  }
+  .form-error { @apply text-xs text-red-500; }
+
+  /* ---- Status Badges ---- */
+  .badge {
+    @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-full
+           text-xs font-semibold uppercase tracking-wide;
+  }
+  .badge-WAITING    { @apply bg-amber-50 text-amber-600; }
+  .badge-CALLING    { @apply bg-red-50 text-red-600; }
+  .badge-SERVING    { @apply bg-emerald-50 text-emerald-600; }
+  .badge-DONE       { @apply bg-gray-100 text-gray-500; }
+  .badge-SKIPPED    { @apply bg-gray-100 text-gray-400; }
+  .badge-PENDING    { @apply bg-amber-50 text-amber-600; }
+  .badge-CHECKED_IN { @apply bg-emerald-50 text-emerald-600; }
+  .badge-COMPLETED  { @apply bg-gray-100 text-gray-500; }
+  .badge-CANCELLED  { @apply bg-gray-100 text-gray-400; }
+
+  /* ---- Table ---- */
+  .table-wrapper { @apply overflow-x-auto rounded-xl border border-gray-100; }
+  .data-table    { @apply w-full text-sm border-collapse; }
+  .data-table thead tr { @apply bg-gray-50 border-b border-gray-200; }
+  .data-table th {
+    @apply px-4 py-3 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider whitespace-nowrap;
+  }
+  .data-table td { @apply px-4 py-3 border-b border-gray-50 text-gray-800 align-middle; }
+  .data-table tbody tr:last-child td { @apply border-b-0; }
+  .data-table tbody tr:hover { @apply bg-gray-50/60; }
+
+  /* ---- Stat Card ---- */
+  .stat-card {
+    @apply bg-white rounded-xl p-5 shadow-card flex items-center gap-4
+           transition-all duration-200 hover:-translate-y-0.5 hover:shadow-lg;
+  }
+  .stat-icon  { @apply w-13 h-13 rounded-xl flex items-center justify-center flex-shrink-0; }
+  .stat-value { @apply text-3xl font-bold leading-none; }
+  .stat-label { @apply text-sm text-gray-500 mt-0.5; }
+
+  /* ---- Spinner ---- */
+  .spinner {
+    @apply inline-block w-5 h-5 border-2 border-gray-200 border-t-primary-600
+           rounded-full animate-spin;
+  }
+  .spinner-lg { @apply w-10 h-10 border-4; }
+}
+
+/* ---- Display page (dark LED board) ---- */
+.calling-number-glow {
+  background: linear-gradient(135deg, #FBBF24, #F59E0B, #EF4444);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: numberGlow 2s ease-in-out infinite alternate;
+}
+
+/* ---- Marquee ---- */
+.marquee-track { animation: marquee 25s linear infinite; }
+
+/* ---- WS dot pulse ---- */
+@keyframes ws-pulse {
+  0%, 100% { opacity: 1; }
+  50%       { opacity: 0.4; }
+}
+.ws-dot-connected    { animation: ws-pulse 2s ease-in-out infinite; }
