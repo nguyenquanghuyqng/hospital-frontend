@@ -1,6 +1,6 @@
 import { Link } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Monitor, Ticket, ClipboardList, Activity, Users, Clock, CheckCircle, AlertCircle } from 'lucide-react'
+import { Monitor, Ticket, ClipboardList, Stethoscope, Activity, Users, Clock, CheckCircle, AlertCircle } from 'lucide-react'
 import { queueApi, receptionApi } from '@/services/api'
 import { today } from '@/utils/format'
 import StatCard from '@/components/ui/StatCard'
@@ -35,6 +35,16 @@ const NAV_CARDS = [
     desc: 'Quản lý danh sách bệnh nhân, gọi số, tiếp nhận lượt khám và xử lý hàng đợi.',
     badge: 'RECEPTION',
     badgeCls: 'bg-violet-50 text-violet-600',
+  },
+  {
+    to: '/doctor',
+    icon: Stethoscope,
+    iconBg: 'bg-teal-100 text-teal-600',
+    cardBorder: 'hover:border-teal-400',
+    title: 'Phòng khám bác sĩ',
+    desc: 'Bác sĩ xem danh sách bệnh nhân chờ khám, cập nhật trạng thái xử lý và chuyển khám.',
+    badge: 'DOCTOR',
+    badgeCls: 'bg-teal-50 text-teal-600',
   },
 ]
 
