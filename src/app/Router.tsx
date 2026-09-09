@@ -28,6 +28,12 @@ const DoctorPatientPage = lazy(() => import('@features/doctor/pages/DoctorPatien
 
 const ExaminationPage   = lazy(() => import('@features/examination/pages/ExaminationPage'));
 
+// Admin
+const AdminHomePage     = lazy(() => import('@features/admin/pages/AdminHomePage'));
+const UsersPage         = lazy(() => import('@features/admin/pages/UsersPage'));
+const CatalogPage       = lazy(() => import('@features/admin/pages/CatalogPage'));
+const ConfigPage        = lazy(() => import('@features/admin/pages/ConfigPage'));
+
 const SuspenseWrap = ({ children }: { children: React.ReactNode }) => (
   <Suspense fallback={<LoadingOverlay />}>{children}</Suspense>
 );
@@ -69,6 +75,17 @@ export default function AppRouter() {
             <Route element={<ProtectedRoute permission="examination" />}>
               <Route path={ROUTES.EXAMINATION}        element={<SuspenseWrap><ExaminationPage /></SuspenseWrap>} />
               <Route path={ROUTES.EXAMINATION_DETAIL} element={<SuspenseWrap><ExaminationPage /></SuspenseWrap>} />
+            </Route>
+
+            {/* Admin — admin only */}
+            <Route element={<ProtectedRoute permission="admin" />}>
+              <Route path={ROUTES.ADMIN}         element={<SuspenseWrap><AdminHomePage /></SuspenseWrap>} />
+              <Route path={ROUTES.ADMIN_USERS}   element={<SuspenseWrap><UsersPage /></SuspenseWrap>} />
+              <Route path={ROUTES.ADMIN_CATALOG} element={<SuspenseWrap><CatalogPage /></SuspenseWrap>} />
+              <Route path={ROUTES.ADMIN_DRUGS}   element={<SuspenseWrap><CatalogPage /></SuspenseWrap>} />
+              <Route path={ROUTES.ADMIN_CLS}     element={<SuspenseWrap><CatalogPage /></SuspenseWrap>} />
+              <Route path={ROUTES.ADMIN_CONFIG}  element={<SuspenseWrap><ConfigPage /></SuspenseWrap>} />
+              <Route path={ROUTES.ADMIN_AUDIT}   element={<SuspenseWrap><ConfigPage /></SuspenseWrap>} />
             </Route>
           </Route>
         </Route>

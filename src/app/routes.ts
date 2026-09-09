@@ -25,6 +25,16 @@ export const ROUTES = {
   // Examination
   EXAMINATION:        '/examination/:receptionId',
   EXAMINATION_DETAIL: '/examination/view/:id',
+
+  // Admin
+  ADMIN:              '/admin',
+  ADMIN_USERS:        '/admin/users',
+  ADMIN_CATALOG:      '/admin/catalog',
+  ADMIN_DRUGS:        '/admin/catalog/drugs',
+  ADMIN_CLS:          '/admin/catalog/cls',
+  ADMIN_ICD10:        '/admin/catalog/icd10',
+  ADMIN_CONFIG:       '/admin/config',
+  ADMIN_AUDIT:        '/admin/audit',
 } as const;
 
 /** Tạo path có params, e.g. toPath(ROUTES.RECEPTION_DETAIL, { id: 5 }) */

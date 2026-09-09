@@ -14,9 +14,11 @@ import type { User, UserRole } from '@/types';
 // ── Permissions (RBAC) ────────────────────────────────────────────────────────
 /** Tiêu chí 8: permission map rõ ràng, tập trung */
 export const ROLE_PERMISSIONS: Record<UserRole, string[]> = {
-  admin:  ['reception', 'queue', 'doctor', 'examination', 'admin'],
-  doctor: ['doctor', 'examination'],
-  nurse:  ['reception', 'queue'],
+  admin:        ['reception', 'queue', 'doctor', 'examination', 'cashier', 'catalog', 'admin'],
+  doctor:       ['doctor', 'examination'],
+  nurse:        ['reception', 'queue', 'doctor', 'examination'],
+  receptionist: ['reception', 'queue'],
+  cashier:      ['cashier', 'reception'],
 };
 
 export function hasPermission(role: UserRole | undefined, permission: string): boolean {

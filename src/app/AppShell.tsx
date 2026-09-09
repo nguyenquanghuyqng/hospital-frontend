@@ -17,9 +17,11 @@ interface NavItem {
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { label: 'Tiếp đón',      icon: '🏥', to: ROUTES.RECEPTION, permission: 'reception' },
-  { label: 'Hàng chờ',      icon: '🎫', to: ROUTES.QUEUE,     permission: 'queue'     },
-  { label: 'Phòng khám',    icon: '🩺', to: ROUTES.DOCTOR,    permission: 'doctor'    },
+  { label: 'Tiếp đón',      icon: '🏥', to: ROUTES.RECEPTION,    permission: 'reception' },
+  { label: 'Hàng chờ',      icon: '🎫', to: ROUTES.QUEUE,        permission: 'queue'     },
+  { label: 'Phòng khám',    icon: '🩺', to: ROUTES.DOCTOR,       permission: 'doctor'    },
+  { label: 'Thu ngân',      icon: '💰', to: '/cashier',           permission: 'cashier'   },
+  { label: 'Quản trị',      icon: '⚙️',  to: ROUTES.ADMIN,        permission: 'admin'     },
 ];
 
 export default function AppShell() {

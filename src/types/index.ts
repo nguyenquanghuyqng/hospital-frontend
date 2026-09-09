@@ -11,7 +11,7 @@ export type DispositionType =
 export type PaymentType =
   | 'bhyt' | 'fee' | 'request' | 'health' | 'consume'
   | 'under6' | 'vaccine' | 'free' | 'defer';
-export type UserRole = 'doctor' | 'nurse' | 'admin';
+export type UserRole = 'doctor' | 'nurse' | 'receptionist' | 'cashier' | 'admin';
 
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
