@@ -74,7 +74,7 @@ export function Card({ title, actions, footer, children, className }: CardProps)
     <div className={clsx('card', className)}>
       {(title ?? actions) && (
         <div className="card-header">
-          {title && <span className="font-semibold text-base" style={{ color: 'var(--clr-gray-800)' }}>{title}</span>}
+          {title && <span className="card-header-title">{title}</span>}
           {actions && <div className="flex gap-2">{actions}</div>}
         </div>
       )}

@@ -704,7 +704,7 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
             {/* Họ tên */}
             <div>
               <FLabel required>Họ và tên</FLabel>
-              <input className="form-input" style={{ marginTop: 5 }}
+              <input className="form-input"
                 value={fullName} onChange={e => setFullName(e.target.value)}
                 onBlur={!foundPatient ? handleSearchByName : undefined}
                 placeholder="Nguyễn Văn A" readOnly={isLocked} />
@@ -714,13 +714,13 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
             <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 0.8fr 1fr', gap: 10 }}>
               <div>
                 <FLabel>Sinh ngày</FLabel>
-                <input className="form-input" style={{ marginTop: 5 }} type="date"
+                <input className="form-input" type="date"
                   value={dateOfBirth} onChange={e => setDateOfBirth(e.target.value)}
                   readOnly={isLocked} />
               </div>
               <div>
                 <FLabel>Năm sinh</FLabel>
-                <input className="form-input" style={{ marginTop: 5 }} type="number"
+                <input className="form-input" type="number"
                   min={1900} max={2030} placeholder="1990"
                   value={birthYear} onChange={e => setBirthYear(e.target.value)}
                   readOnly={isLocked} />
@@ -732,7 +732,7 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
               </div>
               <div>
                 <FLabel>Giới tính</FLabel>
-                <select className="form-input" style={{ marginTop: 5 }}
+                <select className="form-input"
                   value={gender} onChange={e => setGender(e.target.value)} disabled={isLocked}>
                   <option value="">—</option>
                   <option value="male">Nam</option>
@@ -745,13 +745,13 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
             <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
               <div>
                 <FLabel>Di động</FLabel>
-                <input className="form-input" style={{ marginTop: 5 }}
+                <input className="form-input"
                   value={phone} onChange={e => setPhone(e.target.value)}
                   placeholder="0912 345 678" readOnly={isLocked} />
               </div>
               <div>
                 <FLabel>Email</FLabel>
-                <input className="form-input" style={{ marginTop: 5 }} type="email"
+                <input className="form-input" type="email"
                   value={email} onChange={e => setEmail(e.target.value)}
                   placeholder="example@email.com" readOnly={isLocked} />
               </div>
@@ -779,13 +779,13 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                   <div>
                     <FLabel>Nghề nghiệp</FLabel>
-                    <input className="form-input" style={{ marginTop: 5 }} value={occupation}
+                    <input className="form-input" value={occupation}
                       onChange={e => setOccupation(e.target.value)} placeholder="Nông dân..."
                       readOnly={isLocked} />
                   </div>
                   <div>
                     <FLabel>Dân tộc</FLabel>
-                    <select className="form-input" style={{ marginTop: 5 }}
+                    <select className="form-input"
                       value={ethnicityCode} onChange={e => handleEthnicityChange(e.target.value)}
                       disabled={isLocked}>
                       <option value="">— Chọn —</option>
@@ -794,7 +794,7 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
                   </div>
                   <div>
                     <FLabel>Quốc tịch</FLabel>
-                    <select className="form-input" style={{ marginTop: 5 }}
+                    <select className="form-input"
                       value={nationalityCode} onChange={e => handleNationalityChange(e.target.value)}
                       disabled={isLocked}>
                       {NATIONALITIES.map(n => <option key={n.code} value={n.code}>{n.code} - {n.name}</option>)}
@@ -802,7 +802,7 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
                   </div>
                   <div>
                     <FLabel>Đối tượng c/sách</FLabel>
-                    <select className="form-input" style={{ marginTop: 5 }}
+                    <select className="form-input"
                       value={policyType} onChange={e => setPolicyType(e.target.value)}
                       disabled={isLocked}>
                       <option value="">—</option>
@@ -815,19 +815,19 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 10 }}>
                   <div>
                     <FLabel>Nơi cấp CCCD·CMND</FLabel>
-                    <input className="form-input" style={{ marginTop: 5 }} value={cccdIssuedBy}
+                    <input className="form-input" value={cccdIssuedBy}
                       onChange={e => setCccdIssuedBy(e.target.value)}
                       placeholder="Cục Cảnh sát QLHC..." readOnly={isLocked} />
                   </div>
                   <div>
                     <FLabel>Ngày cấp</FLabel>
-                    <input className="form-input" style={{ marginTop: 5 }} type="date"
+                    <input className="form-input" type="date"
                       value={cccdIssuedDate} onChange={e => setCccdIssuedDate(e.target.value)}
                       readOnly={isLocked} />
                   </div>
                   <div>
                     <FLabel>Nơi làm việc</FLabel>
-                    <input className="form-input" style={{ marginTop: 5 }} value={workplace}
+                    <input className="form-input" value={workplace}
                       onChange={e => setWorkplace(e.target.value)} placeholder="Tên cơ quan/công ty"
                       readOnly={isLocked} />
                   </div>
@@ -839,25 +839,25 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10 }}>
                     <div>
                       <FLabel>Số nhà · Thôn · Phố</FLabel>
-                      <input className="form-input" style={{ marginTop: 5 }} value={addressStreet}
+                      <input className="form-input" value={addressStreet}
                         onChange={e => setAddressStreet(e.target.value)} placeholder="123 Đường ABC, Thôn 1"
                         readOnly={isLocked} />
                     </div>
                     <div>
                       <FLabel>Phường · Xã</FLabel>
-                      <input className="form-input" style={{ marginTop: 5 }} value={addressWardName}
+                      <input className="form-input" value={addressWardName}
                         onChange={e => setAddressWardName(e.target.value)} placeholder="P. Nghĩa Lộ"
                         readOnly={isLocked} />
                     </div>
                     <div>
                       <FLabel>Quận · Huyện</FLabel>
-                      <input className="form-input" style={{ marginTop: 5 }} value={addressDistrictName}
+                      <input className="form-input" value={addressDistrictName}
                         onChange={e => setAddressDistrictName(e.target.value)} placeholder="H. Tư Nghĩa"
                         readOnly={isLocked} />
                     </div>
                     <div>
                       <FLabel>Tỉnh · Thành phố</FLabel>
-                      <input className="form-input" style={{ marginTop: 5 }} value={addressProvinceName}
+                      <input className="form-input" value={addressProvinceName}
                         onChange={e => setAddressProvinceName(e.target.value)} placeholder="Tỉnh Quảng Ngãi"
                         readOnly={isLocked} />
                     </div>
@@ -870,25 +870,25 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
                   <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr 1fr', gap: 10 }}>
                     <div>
                       <FLabel>Họ tên</FLabel>
-                      <input className="form-input" style={{ marginTop: 5 }} value={contactName}
+                      <input className="form-input" value={contactName}
                         onChange={e => setContactName(e.target.value)} placeholder="Nguyễn Thị B"
                         readOnly={isLocked} />
                     </div>
                     <div>
                       <FLabel>Địa chỉ</FLabel>
-                      <input className="form-input" style={{ marginTop: 5 }} value={contactAddress}
+                      <input className="form-input" value={contactAddress}
                         onChange={e => setContactAddress(e.target.value)} placeholder="Địa chỉ người thân"
                         readOnly={isLocked} />
                     </div>
                     <div>
                       <FLabel>Điện thoại</FLabel>
-                      <input className="form-input" style={{ marginTop: 5 }} value={contactPhone}
+                      <input className="form-input" value={contactPhone}
                         onChange={e => setContactPhone(e.target.value)} placeholder="0912 345 678"
                         readOnly={isLocked} />
                     </div>
                     <div>
                       <FLabel>CMND · CCCD</FLabel>
-                      <input className="form-input" style={{ marginTop: 5 }} value={contactCccd}
+                      <input className="form-input" value={contactCccd}
                         onChange={e => setContactCccd(e.target.value)} placeholder="012345678"
                         readOnly={isLocked} />
                     </div>
@@ -906,37 +906,38 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
               🏥 Thông tin đăng ký khám
             </span>
           </div>
-          <div style={{ padding: '14px 18px', display: 'flex', flexDirection: 'column', gap: 12 }}>
-
-            {/* Hàng 1: Phòng + Đối tượng + Khám + Ưu tiên */}
-            <div style={{ display: 'grid', gridTemplateColumns: '1.5fr 1fr 1fr 1fr', gap: 10 }}>
+          <div style={{ padding: '16px 18px', display: 'flex', flexDirection: 'column', gap: 16 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 14 }}>
               <div>
                 <FLabel required>Phòng khám</FLabel>
-                <select className="form-input" style={{ marginTop: 5 }} value={clinicRoom}
+                <select className="form-input" value={clinicRoom}
                   onChange={e => setClinicRoom(e.target.value)}>
                   <option value="">— Chọn phòng —</option>
                   {CLINIC_ROOMS.map(r => <option key={r} value={r}>{r}</option>)}
                 </select>
               </div>
               <div>
-                <FLabel>Đối tượng</FLabel>
-                <select className="form-input" style={{ marginTop: 5 }} value={subjectType}
+                <FLabel>Đối tượng thanh toán</FLabel>
+                <select className="form-input" value={subjectType}
                   onChange={e => setSubjectType(e.target.value)}>
-                  {SUBJECT_TYPES.map(s => <option key={s.value} value={s.value}>{s.label}</option>)}
+                  {SUBJECT_TYPES.map(s => <option key={s.value} value={s.value}>{s.value} – {s.label}</option>)}
                 </select>
               </div>
               <div>
-                <FLabel>Khám</FLabel>
-                <select className="form-input" style={{ marginTop: 5 }} value={patientCategory}
+                <FLabel>Đối tượng bệnh nhân</FLabel>
+                <select className="form-input" value={patientCategory}
                   onChange={e => setPatientCategory(e.target.value)}>
                   {PATIENT_CATEGORIES.map(c => <option key={c} value={c}>{c}</option>)}
                 </select>
               </div>
               <div>
-                <FLabel>Ưu tiên</FLabel>
-                <select className="form-input" style={{ marginTop: 5, fontWeight: 600,
-                  color: priority === '2' ? '#dc2626' : priority === '1' ? '#d97706' : undefined }}
-                  value={priority} onChange={e => setPriority(e.target.value)}>
+                <FLabel>Độ ưu tiên</FLabel>
+                <select
+                  className="form-input"
+                  style={{ fontWeight: 600, color: priority === '2' ? '#dc2626' : priority === '1' ? '#d97706' : undefined }}
+                  value={priority}
+                  onChange={e => setPriority(e.target.value)}
+                >
                   <option value="0">Bình thường</option>
                   <option value="1">⚡ Ưu tiên</option>
                   <option value="2">🚨 Cấp cứu</option>
@@ -950,25 +951,25 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
                 <div style={{ fontSize: '.75rem', fontWeight: 700, color: '#1d4ed8', textTransform: 'uppercase', letterSpacing: '.06em', marginBottom: 10 }}>
                   🎫 Thông tin BHYT
                 </div>
-                <div style={{ display: 'grid', gridTemplateColumns: '1.4fr 1fr 1fr 1.4fr', gap: 10 }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
                   <div>
                     <FLabel>Số thẻ BHYT</FLabel>
-                    <input className="form-input" style={{ marginTop: 5 }} value={insuranceNo}
+                    <input className="form-input" value={insuranceNo}
                       onChange={e => setInsuranceNo(e.target.value)} placeholder="DN4012345678" />
                   </div>
                   <div>
                     <FLabel>Từ ngày</FLabel>
-                    <input className="form-input" style={{ marginTop: 5 }} type="date"
+                    <input className="form-input" type="date"
                       value={insuranceValidFrom} onChange={e => setInsuranceValidFrom(e.target.value)} />
                   </div>
                   <div>
                     <FLabel>Đến ngày</FLabel>
-                    <input className="form-input" style={{ marginTop: 5 }} type="date"
+                    <input className="form-input" type="date"
                       value={insuranceValidTo} onChange={e => setInsuranceValidTo(e.target.value)} />
                   </div>
                   <div>
                     <FLabel>ĐKKCB ban đầu</FLabel>
-                    <input className="form-input" style={{ marginTop: 5 }} value={initialRegistration}
+                    <input className="form-input" value={initialRegistration}
                       onChange={e => setInitialRegistration(e.target.value)} placeholder="Bệnh viện đăng ký..." />
                   </div>
                 </div>
@@ -986,12 +987,12 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
                 <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 10, marginTop: 10 }}>
                   <div>
                     <FLabel>Cơ sở giới thiệu</FLabel>
-                    <input className="form-input" style={{ marginTop: 5 }} value={referralFacility}
+                    <input className="form-input" value={referralFacility}
                       onChange={e => setReferralFacility(e.target.value)} placeholder="Tên cơ sở chuyển tuyến..." />
                   </div>
                   <div>
                     <FLabel>Nội dung giới thiệu (CĐ)</FLabel>
-                    <input className="form-input" style={{ marginTop: 5 }} value={referralNote}
+                    <input className="form-input" value={referralNote}
                       onChange={e => setReferralNote(e.target.value)} placeholder="Chẩn đoán nơi giới thiệu..." />
                   </div>
                 </div>
@@ -1000,10 +1001,10 @@ function RegisterPanel({ onSuccess, clinicStats }: RegisterPanelProps) {
 
             {/* Lý do khám */}
             <div>
-              <FLabel>Lý do khám</FLabel>
-              <textarea className="form-input" style={{ marginTop: 5 }} value={reason}
+              <FLabel>Lý do khám / triệu chứng chính</FLabel>
+              <textarea className="form-input" value={reason}
                 onChange={e => setReason(e.target.value)}
-                rows={2} placeholder="Triệu chứng, lý do đến khám..." />
+                rows={3} placeholder="Triệu chứng, lý do đến khám, bệnh sử tóm tắt..." />
             </div>
           </div>
         </div>
@@ -1134,7 +1135,13 @@ const cardHeaderStyle: React.CSSProperties = {
 // ── Micro components ──────────────────────────────────────────────────────────
 function FLabel({ children, required }: { children: React.ReactNode; required?: boolean }) {
   return (
-    <label style={{ fontSize: '.8125rem', fontWeight: 600, color: 'var(--clr-gray-600)', display: 'block' }}>
+    <label style={{
+      fontSize: '.8125rem',
+      fontWeight: 600,
+      color: 'var(--clr-gray-600)',
+      display: 'block',
+      marginBottom: 5,  /* consistent spacing above every input */
+    }}>
       {children}{required && <span style={{ color: 'var(--clr-danger)', marginLeft: 2 }}>*</span>}
     </label>
   );

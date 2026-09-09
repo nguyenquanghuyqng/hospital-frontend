@@ -1,14 +1,12 @@
 /**
- * PatientInfoSidebar — Sidebar thông tin bệnh nhân & lịch sử khám
+ * PatientInfoSidebar — Sidebar thông tin bệnh nhân (v3)
  *
- * Hiển thị:
- * - Avatar + tên + mã BN + trạng thái phiếu khám
- * - Thông tin hành chính rút gọn: tuổi, giới tính, dân tộc, CCCD
- * - Địa chỉ đầy đủ với mã hành chính (tỉnh/huyện/xã)
- * - Bác sĩ điều trị + Điều dưỡng (mã + tên)
- * - Số điện thoại + Email
- * - Thông tin chính sách (BHYT, nghèo, ưu tiên)
- * - ExamHistoryTree (lịch sử các lần khám)
+ * Design principles:
+ *   • Data-dense but scannable: thông tin quan trọng nhất ở trên cùng
+ *   • Clinical hierarchy: avatar → name → flags → demographics → contact → visit
+ *   • Progressive disclosure: lịch sử khám collapsible để tránh vertical overflow
+ *   • Color-coded sections: mỗi nhóm có icon + màu riêng để scan nhanh
+ *   • Sticky header: BN name + flags luôn visible khi scroll
  */
 import { useState } from 'react';
 import { StatusBadge } from '@components/ui';
@@ -34,8 +32,8 @@ function calcAge(dob?: string | null, birthYear?: number | null): string {
   return '—';
 }
 
-function buildAddress(p: PatientResponse | null): { full: string; code: string } {
-  if (!p) return { full: '', code: '' };
+function buildAddress(p: PatientResponse | null): string {
+  if (!p) return '';
   const parts = [
     p.address_street,
     p.address_village,
@@ -43,236 +41,424 @@ function buildAddress(p: PatientResponse | null): { full: string; code: string }
     p.address_district_name,
     p.address_province_name,
   ].filter(Boolean);
-  const codes = [
-    p.address_ward_code,
-    p.address_district_code,
-    p.address_province_code,
-  ].filter(Boolean);
-  return {
-    full: parts.join(', ') || p.address || '',
-    code: codes.join('-'),
-  };
+  return parts.join(', ') || p.address || '';
 }
 
-// ── Component ─────────────────────────────────────────────────────────────────
+function fmtDate(iso?: string | null): string {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('vi-VN');
+}
+
+// ── Main component ─────────────────────────────────────────────────────────────
 
 export default function PatientInfoSidebar({ exam, reception, patient }: Props) {
   const [historyOpen, setHistoryOpen] = useState(true);
 
-  const p       = patient;
-  const rec     = reception;
-  const addr    = buildAddress(p);
-  const age     = calcAge(p?.date_of_birth, p?.birth_year);
+  const p   = patient;
+  const rec = reception;
+
+  const age         = calcAge(p?.date_of_birth, p?.birth_year);
   const genderLabel = p?.gender === 'male' ? 'Nam' : p?.gender === 'female' ? 'Nữ' : '—';
+  const address     = buildAddress(p);
+  const nameLetter  = (p?.full_name ?? '?')[0]?.toUpperCase() ?? '?';
 
-  // ── Derived flags ─────────────────────────────────────────────────────────────
-  const isBhyt     = (rec?.subject_type === '1') || !!exam.insurance_number;
-  const isNearPoor = exam.is_near_poor || rec?.is_near_poor;
-  const isPoor     = exam.is_poor      || rec?.is_poor;
-  const isPriority = exam.flag_priority || rec?.priority > 0;
+  // Flags
+  const isBhyt     = exam.subject_type === '1' || !!exam.insurance_number;
+  const isPriority  = exam.flag_priority || (rec?.priority ?? 0) > 0;
+  const isNearPoor  = exam.is_near_poor || rec?.is_near_poor;
+  const isPoor      = exam.is_poor || rec?.is_poor;
+  const isReferral  = rec?.is_referral;
+  const isEmergency = exam.disposition === 'emergency';
 
-  const nameLetter = (p?.full_name ?? '?')[0]?.toUpperCase() ?? '?';
+  // Insurance validity
+  const today       = new Date(); today.setHours(0, 0, 0, 0);
+  const insExpiry   = exam.insurance_valid_to ? new Date(exam.insurance_valid_to) : null;
+  const insDaysLeft = insExpiry ? Math.round((insExpiry.getTime() - today.getTime()) / 86400000) : null;
+  const insStatus   = insDaysLeft === null ? null
+    : insDaysLeft < 0   ? 'expired'
+    : insDaysLeft <= 30 ? 'warning'
+    : 'valid';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 0, height: '100%', overflowY: 'auto' }}>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      minHeight: '100%',
+      background: '#fff',
+    }}>
 
-      {/* ── Avatar + tên ─────────────────────────────────────────────────────── */}
+      {/* ── Sticky patient header ──────────────────────────────────────────── */}
       <div style={{
-        padding: '16px 14px',
-        background: 'linear-gradient(135deg, var(--clr-primary-dark) 0%, var(--clr-primary) 100%)',
-        color: '#fff',
+        position: 'sticky',
+        top: 0,
+        zIndex: 10,
+        background: isEmergency
+          ? 'linear-gradient(160deg, #7f1d1d 0%, #991b1b 100%)'
+          : 'linear-gradient(160deg, #075985 0%, #0284c7 100%)',
+        padding: '14px 14px 12px',
+        flexShrink: 0,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+        {/* Avatar + name row */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+          {/* Avatar */}
           <div style={{
-            width: 48, height: 48, borderRadius: '50%',
-            background: 'rgba(255,255,255,.25)',
+            width: 44, height: 44,
+            borderRadius: '50%',
+            background: 'rgba(255,255,255,.2)',
+            border: '2px solid rgba(255,255,255,.35)',
             display: 'flex', alignItems: 'center', justifyContent: 'center',
-            fontSize: '1.3rem', fontWeight: 800, flexShrink: 0,
+            fontWeight: 800, fontSize: '1.1rem', color: '#fff',
+            flexShrink: 0,
+            letterSpacing: '-.02em',
           }}>
             {nameLetter}
           </div>
-          <div style={{ minWidth: 0 }}>
-            <div style={{ fontWeight: 800, fontSize: '1rem', lineHeight: 1.3 }} className="truncate">
+
+          {/* Name + code + status */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{
+              fontWeight: 800, fontSize: '.95rem', color: '#fff',
+              lineHeight: 1.3,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            }}>
               {p?.full_name ?? `BN #${exam.patient_id}`}
             </div>
+
             {p?.patient_code && (
-              <div style={{ fontSize: '.75rem', opacity: .8, marginTop: 2 }}>
-                Mã BN: {p.patient_code}
+              <div style={{ fontSize: '.68rem', color: 'rgba(255,255,255,.6)', marginTop: 1, fontFamily: 'var(--font-mono)' }}>
+                #{p.patient_code}
               </div>
             )}
-            <div style={{ marginTop: 4 }}>
+
+            <div style={{ marginTop: 5 }}>
               <StatusBadge status={exam.status} />
             </div>
           </div>
         </div>
 
-        {/* Quick flags */}
-        <div style={{ display: 'flex', gap: 6, marginTop: 10, flexWrap: 'wrap' }}>
+        {/* Clinical flags row */}
+        <div style={{ display: 'flex', gap: 5, marginTop: 10, flexWrap: 'wrap' }}>
+          {isEmergency && (
+            <FlagChip label="🚨 CẤP CỨU" bg="rgba(255,255,255,.25)" color="#fff" bold />
+          )}
+          {isPriority && !isEmergency && (
+            <FlagChip label="⭐ Ưu tiên" bg="#fef3c7" color="#92400e" bold />
+          )}
           {isBhyt && (
-            <span style={{ fontSize: '.7rem', background: 'rgba(255,255,255,.2)', padding: '2px 8px', borderRadius: 999, fontWeight: 700 }}>
-              🏥 BHYT
-            </span>
+            <FlagChip label="🏥 BHYT" bg="rgba(255,255,255,.18)" color="rgba(255,255,255,.9)" />
           )}
-          {isPriority && (
-            <span style={{ fontSize: '.7rem', background: '#fbbf24', color: '#92400e', padding: '2px 8px', borderRadius: 999, fontWeight: 700 }}>
-              ⭐ Ưu tiên
-            </span>
+          {(isPoor || isNearPoor) && (
+            <FlagChip
+              label={isPoor ? '🍀 Hộ nghèo' : '🍀 C/H Nghèo'}
+              bg="rgba(110,231,183,.25)" color="#6ee7b7"
+            />
           )}
-          {(isNearPoor || isPoor) && (
-            <span style={{ fontSize: '.7rem', background: '#6ee7b7', color: '#064e3b', padding: '2px 8px', borderRadius: 999, fontWeight: 700 }}>
-              🍀 {isPoor ? 'Hộ nghèo' : 'C/H Nghèo'}
-            </span>
-          )}
-          {rec?.is_referral && (
-            <span style={{ fontSize: '.7rem', background: 'rgba(255,255,255,.2)', padding: '2px 8px', borderRadius: 999 }}>
-              🔀 Chuyển tuyến
-            </span>
+          {isReferral && (
+            <FlagChip label="🔀 Chuyển tuyến" bg="rgba(255,255,255,.12)" color="rgba(255,255,255,.75)" />
           )}
         </div>
-      </div>
 
-      {/* ── Thông tin hành chính ─────────────────────────────────────────────── */}
-      <Section title="👤 Thông tin cá nhân">
-        <InfoRow label="Năm sinh" value={p?.date_of_birth ? new Date(p.date_of_birth).toLocaleDateString('vi-VN') : (p?.birth_year ? String(p.birth_year) : '—')} />
-        <InfoRow label="Tuổi"     value={age} />
-        <InfoRow label="Giới tính" value={genderLabel} />
-        {p?.ethnicity_name && <InfoRow label="Dân tộc" value={`${p.ethnicity_name}${p.ethnicity_code ? ` (${p.ethnicity_code})` : ''}`} />}
-        {p?.nationality_name && p.nationality_name !== 'Việt Nam' && (
-          <InfoRow label="Quốc tịch" value={p.nationality_name} />
-        )}
-        {p?.cccd && (
-          <InfoRow label="CCCD/CMND" value={p.cccd} mono />
-        )}
-        {p?.occupation && <InfoRow label="Nghề nghiệp" value={p.occupation} />}
-      </Section>
-
-      {/* ── Liên hệ ──────────────────────────────────────────────────────────── */}
-      {(p?.phone || p?.email) && (
-        <Section title="📞 Liên hệ">
-          {p.phone && <InfoRow label="Điện thoại" value={p.phone} />}
-          {p.email && <InfoRow label="Email"      value={p.email} />}
-        </Section>
-      )}
-
-      {/* ── Địa chỉ ──────────────────────────────────────────────────────────── */}
-      {addr.full && (
-        <Section title="🏠 Địa chỉ">
-          <div style={{ fontSize: '.78rem', color: 'var(--clr-gray-700)', lineHeight: 1.6 }}>
-            {addr.full}
-          </div>
-          {addr.code && (
-            <div style={{ fontSize: '.7rem', color: 'var(--clr-gray-400)', marginTop: 4, fontFamily: 'monospace' }}>
-              Mã HC: {addr.code}
-            </div>
-          )}
-        </Section>
-      )}
-
-      {/* ── Phiếu khám hiện tại ──────────────────────────────────────────────── */}
-      <Section title="🩺 Lượt khám">
-        {rec?.clinic_room && <InfoRow label="Phòng khám" value={rec.clinic_room} />}
-        {rec?.visit_number !== null && rec?.visit_number !== undefined && (
-          <InfoRow label="STT" value={String(rec.visit_number)} />
-        )}
-        <InfoRow label="Ngày khám" value={new Date(exam.exam_date).toLocaleDateString('vi-VN')} />
-        {exam.exam_start_at && (
-          <InfoRow label="Bắt đầu" value={new Date(exam.exam_start_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })} />
-        )}
-        <InfoRow label="Mã lượt" value={`#${exam.reception_id}`} mono />
-        {rec?.subject_name && <InfoRow label="Đối tượng" value={rec.subject_name} />}
-        {exam.insurance_number && <InfoRow label="Số thẻ BHYT" value={exam.insurance_number} mono />}
-      </Section>
-
-      {/* ── Bác sĩ + Điều dưỡng ─────────────────────────────────────────────── */}
-      {(exam.doctor_name || exam.nurse_name) && (
-        <Section title="👨‍⚕️ Nhân lực phụ trách">
-          {exam.doctor_id && exam.doctor_name && (
-            <InfoRow label="Bác sĩ" value={`${exam.doctor_name} (ID: ${exam.doctor_id})`} />
-          )}
-          {!exam.doctor_id && exam.doctor_name && (
-            <InfoRow label="Bác sĩ" value={exam.doctor_name} />
-          )}
-          {exam.nurse_name && <InfoRow label="Điều dưỡng" value={exam.nurse_name} />}
-        </Section>
-      )}
-
-      {/* ── Chẩn đoán tóm tắt ───────────────────────────────────────────────── */}
-      {exam.diagnoses.length > 0 && (
-        <Section title="🏷️ Chẩn đoán">
-          {exam.diagnoses.map(d => (
-            <div key={d.id} style={{
-              padding: '5px 8px', borderRadius: 6, marginBottom: 4,
-              background: d.is_primary ? 'var(--clr-primary-light)' : 'var(--clr-gray-50)',
-              border: `1px solid ${d.is_primary ? 'var(--clr-primary)30' : 'var(--clr-gray-100)'}`,
-              fontSize: '.78rem',
-            }}>
-              {d.is_primary && (
-                <span style={{ fontSize: '.65rem', background: 'var(--clr-primary)', color: '#fff', padding: '1px 6px', borderRadius: 999, marginRight: 5 }}>Chính</span>
+        {/* Insurance validity strip */}
+        {isBhyt && insStatus && (
+          <div style={{
+            marginTop: 8,
+            padding: '5px 9px',
+            borderRadius: 6,
+            background: insStatus === 'expired' ? 'rgba(220,38,38,.25)'
+              : insStatus === 'warning'  ? 'rgba(217,119,6,.25)'
+              : 'rgba(22,163,74,.2)',
+            border: `1px solid ${
+              insStatus === 'expired' ? 'rgba(252,165,165,.4)'
+              : insStatus === 'warning'  ? 'rgba(253,230,138,.4)'
+              : 'rgba(134,239,172,.3)'}`,
+            display: 'flex', alignItems: 'center', gap: 7,
+          }}>
+            <span style={{ fontSize: '.75rem' }}>
+              {insStatus === 'expired' ? '❌' : insStatus === 'warning' ? '⚠️' : '✅'}
+            </span>
+            <div>
+              {exam.insurance_number && (
+                <div style={{ fontSize: '.65rem', fontFamily: 'var(--font-mono)', color: 'rgba(255,255,255,.75)', letterSpacing: '.02em' }}>
+                  {exam.insurance_number}
+                </div>
               )}
-              {d.icd_code && <span style={{ fontWeight: 700, color: 'var(--clr-primary-dark)', marginRight: 5 }}>{d.icd_code}</span>}
-              {d.icd_name}
+              <div style={{ fontSize: '.68rem', color: 'rgba(255,255,255,.85)', fontWeight: 600 }}>
+                {insStatus === 'expired'
+                  ? `Hết hạn ${Math.abs(insDaysLeft!)} ngày trước`
+                  : insStatus === 'warning'
+                    ? `Còn ${insDaysLeft} ngày (sắp hết hạn)`
+                    : `BHYT còn hiệu lực đến ${fmtDate(exam.insurance_valid_to)}`}
+              </div>
             </div>
-          ))}
-        </Section>
-      )}
-
-      {/* ── Lịch sử khám ────────────────────────────────────────────────────── */}
-      <div style={{ borderTop: '1px solid var(--clr-gray-100)' }}>
-        <button
-          type="button"
-          onClick={() => setHistoryOpen(v => !v)}
-          style={{
-            width: '100%', display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            padding: '10px 14px', background: 'none', border: 'none', cursor: 'pointer',
-            fontFamily: 'var(--font-sans)', fontSize: '.82rem', fontWeight: 700,
-            color: 'var(--clr-gray-700)',
-          }}
-        >
-          <span>🕐 Lịch sử khám</span>
-          <span style={{
-            fontSize: '.7rem', transform: historyOpen ? 'rotate(180deg)' : 'none',
-            transition: 'transform .15s', color: 'var(--clr-gray-400)',
-          }}>▼</span>
-        </button>
-
-        {historyOpen && (
-          <div style={{ paddingLeft: 4, paddingBottom: 8 }}>
-            <ExamHistoryTree
-              patientId={exam.patient_id}
-              currentExamId={exam.id}
-            />
           </div>
         )}
       </div>
 
+      {/* ── Scrollable body ────────────────────────────────────────────────── */}
+      <div style={{ flex: 1, overflowY: 'auto', display: 'flex', flexDirection: 'column' }}>
+
+        {/* ── Thông tin nhân khẩu ─────────────────────────────────── */}
+        <SidebarSection icon="👤" title="Thông tin cá nhân" accent="#0284c7">
+          <InfoGrid>
+            <InfoCell label="Ngày sinh" value={
+              p?.date_of_birth
+                ? fmtDate(p.date_of_birth)
+                : p?.birth_year ? String(p.birth_year) : '—'
+            } />
+            <InfoCell label="Tuổi" value={age} highlight />
+            <InfoCell label="Giới tính" value={genderLabel} />
+            {p?.cccd && <InfoCell label="CCCD/CMND" value={p.cccd} mono />}
+            {p?.ethnicity_name && <InfoCell label="Dân tộc" value={p.ethnicity_name} />}
+            {p?.occupation && <InfoCell label="Nghề nghiệp" value={p.occupation} />}
+          </InfoGrid>
+        </SidebarSection>
+
+        {/* ── Liên hệ ─────────────────────────────────────────────── */}
+        {(p?.phone || p?.email) && (
+          <SidebarSection icon="📞" title="Liên hệ" accent="#7c3aed">
+            <InfoGrid>
+              {p.phone && <InfoCell label="Điện thoại" value={p.phone} span2 />}
+              {p.email && <InfoCell label="Email" value={p.email} span2 />}
+            </InfoGrid>
+          </SidebarSection>
+        )}
+
+        {/* ── Địa chỉ ─────────────────────────────────────────────── */}
+        {address && (
+          <SidebarSection icon="🏠" title="Địa chỉ" accent="#059669">
+            <div style={{ fontSize: '.77rem', color: 'var(--clr-gray-700)', lineHeight: 1.65 }}>
+              {address}
+            </div>
+          </SidebarSection>
+        )}
+
+        {/* ── Lượt khám hiện tại ──────────────────────────────────── */}
+        <SidebarSection icon="🩺" title="Lượt khám" accent="#d97706">
+          <InfoGrid>
+            {rec?.clinic_room && <InfoCell label="Phòng khám" value={rec.clinic_room} span2 />}
+            <InfoCell label="Ngày khám" value={fmtDate(exam.exam_date)} />
+            {exam.exam_start_at && (
+              <InfoCell label="Giờ bắt đầu" value={
+                new Date(exam.exam_start_at).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })
+              } />
+            )}
+            <InfoCell label="Mã lượt" value={`#${exam.reception_id}`} mono />
+            {rec?.visit_number != null && (
+              <InfoCell label="STT" value={String(rec.visit_number)} />
+            )}
+            {rec?.subject_name && <InfoCell label="Đối tượng" value={rec.subject_name} span2 />}
+          </InfoGrid>
+        </SidebarSection>
+
+        {/* ── Bác sĩ / Điều dưỡng ─────────────────────────────────── */}
+        {(exam.doctor_name || exam.nurse_name) && (
+          <SidebarSection icon="👨‍⚕️" title="Nhân lực phụ trách" accent="#0369a1">
+            <InfoGrid>
+              {exam.doctor_name && (
+                <InfoCell label="Bác sĩ" value={exam.doctor_name} span2 />
+              )}
+              {exam.nurse_name && (
+                <InfoCell label="Điều dưỡng" value={exam.nurse_name} span2 />
+              )}
+            </InfoGrid>
+          </SidebarSection>
+        )}
+
+        {/* ── Chẩn đoán tóm tắt ───────────────────────────────────── */}
+        {exam.diagnoses.length > 0 && (
+          <SidebarSection icon="🏷️" title="Chẩn đoán" accent="#dc2626">
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+              {exam.diagnoses.map(d => (
+                <div key={d.id} style={{
+                  display: 'flex', alignItems: 'flex-start', gap: 6,
+                  padding: '6px 9px',
+                  borderRadius: 7,
+                  background: d.is_primary ? '#fef2f2' : 'var(--clr-gray-50)',
+                  border: `1px solid ${d.is_primary ? '#fca5a5' : 'var(--clr-gray-200)'}`,
+                }}>
+                  {d.is_primary && (
+                    <span style={{
+                      flexShrink: 0,
+                      fontSize: '.6rem', fontWeight: 800,
+                      background: '#dc2626', color: '#fff',
+                      padding: '1px 5px', borderRadius: 3,
+                      lineHeight: 1.6,
+                      marginTop: 1,
+                    }}>CĐ chính</span>
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {d.icd_code && (
+                      <span style={{
+                        fontSize: '.7rem', fontWeight: 700,
+                        color: 'var(--clr-primary-dark)',
+                        fontFamily: 'var(--font-mono)',
+                        marginRight: 5,
+                      }}>{d.icd_code}</span>
+                    )}
+                    <span style={{ fontSize: '.77rem', color: 'var(--clr-gray-700)', lineHeight: 1.4 }}>
+                      {d.icd_name}
+                    </span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </SidebarSection>
+        )}
+
+        {/* ── Lịch sử khám ─────────────────────────────────────────── */}
+        <div style={{ borderTop: '1px solid var(--clr-gray-100)' }}>
+          <button
+            type="button"
+            onClick={() => setHistoryOpen(v => !v)}
+            style={{
+              width: '100%',
+              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+              padding: '9px 14px',
+              background: historyOpen ? 'var(--clr-gray-50)' : '#fff',
+              border: 'none',
+              borderBottom: historyOpen ? '1px solid var(--clr-gray-100)' : 'none',
+              cursor: 'pointer',
+              fontFamily: 'var(--font-sans)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', gap: 7 }}>
+              <span style={{
+                display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                width: 20, height: 20,
+                background: '#e0f2fe', borderRadius: 5,
+                fontSize: '.65rem',
+              }}>🕐</span>
+              <span style={{ fontSize: '.78rem', fontWeight: 700, color: 'var(--clr-gray-700)' }}>
+                Lịch sử khám
+              </span>
+            </div>
+            <span style={{
+              fontSize: '.68rem', color: 'var(--clr-gray-400)',
+              transform: historyOpen ? 'rotate(180deg)' : 'none',
+              transition: 'transform .15s',
+              display: 'inline-block',
+            }}>▼</span>
+          </button>
+
+          {historyOpen && (
+            <div style={{ padding: '4px 4px 8px' }}>
+              <ExamHistoryTree patientId={exam.patient_id} currentExamId={exam.id} />
+            </div>
+          )}
+        </div>
+
+      </div>
     </div>
   );
 }
 
-// ── Sub-components ────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Sub-components
+// ─────────────────────────────────────────────────────────────────────────────
 
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
+function FlagChip({ label, bg, color, bold }: { label: string; bg: string; color: string; bold?: boolean }) {
   return (
-    <div style={{ borderTop: '1px solid var(--clr-gray-100)', padding: '10px 14px' }}>
-      <div style={{ fontSize: '.72rem', fontWeight: 700, color: 'var(--clr-gray-400)', textTransform: 'uppercase', letterSpacing: '.05em', marginBottom: 8 }}>
-        {title}
+    <span style={{
+      display: 'inline-flex', alignItems: 'center',
+      fontSize: '.65rem',
+      fontWeight: bold ? 800 : 600,
+      padding: '2px 7px',
+      borderRadius: 9999,
+      background: bg,
+      color,
+      lineHeight: 1.5,
+    }}>
+      {label}
+    </span>
+  );
+}
+
+function SidebarSection({
+  icon, title, accent, children,
+}: {
+  icon: string; title: string; accent: string; children: React.ReactNode;
+}) {
+  return (
+    <div style={{ borderTop: '1px solid var(--clr-gray-100)' }}>
+      {/* Section header */}
+      <div style={{
+        display: 'flex', alignItems: 'center', gap: 6,
+        padding: '7px 14px 5px',
+      }}>
+        <span style={{
+          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          width: 18, height: 18,
+          background: accent + '18',
+          borderRadius: 4,
+          fontSize: '.62rem',
+          flexShrink: 0,
+        }}>{icon}</span>
+        <span style={{
+          fontSize: '.65rem',
+          fontWeight: 700,
+          textTransform: 'uppercase' as const,
+          letterSpacing: '.07em',
+          color: accent,
+        }}>{title}</span>
       </div>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+
+      {/* Content */}
+      <div style={{ padding: '0 14px 10px' }}>
         {children}
       </div>
     </div>
   );
 }
 
-function InfoRow({ label, value, mono }: { label: string; value: string; mono?: boolean }) {
+/**
+ * InfoGrid — 2-column grid for label/value pairs
+ */
+function InfoGrid({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', gap: 6, alignItems: 'baseline', fontSize: '.78rem' }}>
-      <span style={{ color: 'var(--clr-gray-400)', flexShrink: 0, minWidth: 78 }}>{label}:</span>
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '1fr 1fr',
+      gap: '4px 8px',
+    }}>
+      {children}
+    </div>
+  );
+}
+
+function InfoCell({
+  label, value, mono, highlight, span2,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+  highlight?: boolean;
+  span2?: boolean;
+}) {
+  return (
+    <div style={{
+      display: 'flex', flexDirection: 'column', gap: 1,
+      gridColumn: span2 ? 'span 2' : undefined,
+      minWidth: 0,
+    }}>
       <span style={{
-        color: 'var(--clr-gray-800)', fontWeight: 500,
-        fontFamily: mono ? 'monospace' : 'inherit',
-        wordBreak: 'break-all',
-      }}>{value}</span>
+        fontSize: '.6rem',
+        fontWeight: 600,
+        textTransform: 'uppercase' as const,
+        letterSpacing: '.05em',
+        color: 'var(--clr-gray-400)',
+      }}>{label}</span>
+      <span style={{
+        fontSize: '.77rem',
+        fontWeight: highlight ? 700 : 500,
+        color: highlight ? 'var(--clr-gray-900)' : 'var(--clr-gray-700)',
+        fontFamily: mono ? 'var(--font-mono)' : 'inherit',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: span2 ? 'normal' : 'nowrap' as const,
+        lineHeight: 1.4,
+      }}>
+        {value || '—'}
+      </span>
     </div>
   );
 }
