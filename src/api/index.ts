@@ -13,3 +13,4 @@ export { catalogApi }    from './catalog.api';
 export { clinicalApi }   from './clinical.api';
 export { billingApi }    from './billing.api';
 export { appointmentApi } from './appointment.api';
+export { exportApi }     from './export.api';

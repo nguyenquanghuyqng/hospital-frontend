@@ -25,10 +25,9 @@ import type { ExaminationResponse, ReceptionResponse } from '@/types';
 import DiagnosisPanel from '../components/DiagnosisPanel';
 import PrescriptionPanel from '../components/PrescriptionPanel';
 import ClsPanel from '../components/ClsPanel';
-import BillingPanel from '../components/BillingPanel';
 
 // ── Tab definitions ────────────────────────────────────────────────────────────
-type TabId = 'exam' | 'prescription' | 'cls' | 'billing' | 'appointment' | 'bhxh' | 'cost';
+type TabId = 'exam' | 'prescription' | 'cls' | 'deposit' | 'appointment' | 'bhxh' | 'cost';
 
 interface Tab { id: TabId; icon: string; label: string }
 
@@ -36,10 +35,10 @@ const TABS: Tab[] = [
   { id: 'exam',        icon: '🩺', label: 'Khám bệnh'     },
   { id: 'prescription',icon: '💊', label: 'Đơn thuốc'     },
   { id: 'cls',         icon: '🔬', label: 'Chỉ định CLS'  },
-  { id: 'billing',     icon: '🧾', label: 'Viện phí'      },
+  { id: 'deposit',     icon: '💰', label: 'Tạm ứng'       },
   { id: 'appointment', icon: '📅', label: 'Hẹn khám'      },
   { id: 'bhxh',        icon: '📄', label: 'Giấy BHXH'     },
-  { id: 'cost',        icon: '💰', label: 'Chi phí'        },
+  { id: 'cost',        icon: '🧾', label: 'Chi phí'        },
 ];
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -266,7 +265,7 @@ export default function ExaminationPage() {
           <BillingPanel
             examId={exam.id}
             patientName={p?.full_name}
-            canEdit={true}
+            canEdit={canEditBilling}
           />
         )}
 

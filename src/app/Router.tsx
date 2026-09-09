@@ -28,6 +28,13 @@ const DoctorPatientPage = lazy(() => import('@features/doctor/pages/DoctorPatien
 
 const ExaminationPage   = lazy(() => import('@features/examination/pages/ExaminationPage'));
 
+// Cashier
+const CashierPage       = lazy(() => import('@features/cashier/pages/CashierPage'));
+const CashierBillPage   = lazy(() => import('@features/cashier/pages/CashierBillPage'));
+
+// Appointment
+const AppointmentPage   = lazy(() => import('@features/appointment/pages/AppointmentPage'));
+
 // Admin
 const AdminHomePage     = lazy(() => import('@features/admin/pages/AdminHomePage'));
 const UsersPage         = lazy(() => import('@features/admin/pages/UsersPage'));
@@ -75,6 +82,17 @@ export default function AppRouter() {
             <Route element={<ProtectedRoute permission="examination" />}>
               <Route path={ROUTES.EXAMINATION}        element={<SuspenseWrap><ExaminationPage /></SuspenseWrap>} />
               <Route path={ROUTES.EXAMINATION_DETAIL} element={<SuspenseWrap><ExaminationPage /></SuspenseWrap>} />
+            </Route>
+
+            {/* Cashier — cashier / admin */}
+            <Route element={<ProtectedRoute permission="cashier" />}>
+              <Route path={ROUTES.CASHIER}      element={<SuspenseWrap><CashierPage /></SuspenseWrap>} />
+              <Route path={ROUTES.CASHIER_BILL} element={<SuspenseWrap><CashierBillPage /></SuspenseWrap>} />
+            </Route>
+
+            {/* Appointments — receptionist / admin / nurse */}
+            <Route element={<ProtectedRoute permission="reception" />}>
+              <Route path={ROUTES.APPOINTMENTS} element={<SuspenseWrap><AppointmentPage /></SuspenseWrap>} />
             </Route>
 
             {/* Admin — admin only */}
