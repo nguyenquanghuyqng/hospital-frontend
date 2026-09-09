@@ -25,9 +25,10 @@ import type { ExaminationResponse, ReceptionResponse } from '@/types';
 import DiagnosisPanel from '../components/DiagnosisPanel';
 import PrescriptionPanel from '../components/PrescriptionPanel';
 import ClsPanel from '../components/ClsPanel';
+import BillingPanel from '../components/BillingPanel';
 
 // ── Tab definitions ────────────────────────────────────────────────────────────
-type TabId = 'exam' | 'prescription' | 'cls' | 'deposit' | 'appointment' | 'bhxh' | 'cost';
+type TabId = 'exam' | 'prescription' | 'cls' | 'billing' | 'appointment' | 'bhxh' | 'cost';
 
 interface Tab { id: TabId; icon: string; label: string }
 
@@ -35,10 +36,10 @@ const TABS: Tab[] = [
   { id: 'exam',        icon: '🩺', label: 'Khám bệnh'     },
   { id: 'prescription',icon: '💊', label: 'Đơn thuốc'     },
   { id: 'cls',         icon: '🔬', label: 'Chỉ định CLS'  },
-  { id: 'deposit',     icon: '💰', label: 'Tạm ứng'       },
+  { id: 'billing',     icon: '🧾', label: 'Viện phí'      },
   { id: 'appointment', icon: '📅', label: 'Hẹn khám'      },
   { id: 'bhxh',        icon: '📄', label: 'Giấy BHXH'     },
-  { id: 'cost',        icon: '🧾', label: 'Chi phí'        },
+  { id: 'cost',        icon: '💰', label: 'Chi phí'        },
 ];
 
 // ── Main component ─────────────────────────────────────────────────────────────
@@ -260,9 +261,13 @@ export default function ExaminationPage() {
           />
         )}
 
-        {/* ── Tab: Tạm ứng ────────────────────────────────────────────────── */}
-        {activeTab === 'deposit' && (
-          <DepositPanel examId={exam.id} disabled={isCompleted} patientName={p?.full_name} />
+        {/* ── Tab: Viện phí ───────────────────────────────────────────────── */}
+        {activeTab === 'billing' && (
+          <BillingPanel
+            examId={exam.id}
+            patientName={p?.full_name}
+            canEdit={true}
+          />
         )}
 
         {/* ── Tab: Hẹn khám ───────────────────────────────────────────────── */}
@@ -411,126 +416,47 @@ function SymptomsEditor({ examId, value, disabled, onSaved }: {
   );
 }
 
-// ── Deposit Panel (Tạm ứng) ────────────────────────────────────────────────────
-function DepositPanel({ patientName, disabled }: {
-  examId: number; disabled: boolean; patientName?: string | null;
-}) {
-  const [amount,  setAmount]  = useState('');
-  const [method,  setMethod]  = useState('cash');
-  const [note,    setNote]    = useState('');
-  const [records, setRecords] = useState<Array<{ id: number; amount: string; method: string; note: string; time: string }>>([]);
-
-  const handleAdd = () => {
-    if (!amount || Number(amount) <= 0) { toast.error('Nhập số tiền hợp lệ'); return; }
-    setRecords(prev => [...prev, {
-      id: Date.now(), amount, method, note,
-      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
-    }]);
-    setAmount(''); setNote('');
-    toast.success('Đã thêm tạm ứng');
-  };
-
-  const total = records.reduce((s, r) => s + Number(r.amount), 0);
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      {/* Summary bar */}
-      <div style={{
-        padding: '14px 20px', background: 'var(--clr-primary-light)', borderRadius: 12,
-        display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-      }}>
-        <span style={{ fontSize: '.9rem', color: 'var(--clr-primary-dark)' }}>
-          Tổng tạm ứng — {patientName ?? ''}
-        </span>
-        <span style={{ fontSize: '1.4rem', fontWeight: 800, color: 'var(--clr-primary)' }}>
-          {total.toLocaleString('vi-VN')} ₫
-        </span>
-      </div>
-
-      {/* Add form */}
-      {!disabled && (
-        <Card title="Thêm tạm ứng">
-          <div className="form-row form-row-3" style={{ marginBottom: 12 }}>
-            <Field label="Số tiền (VNĐ)" required>
-              <input
-                type="number" min={0} step={1000} className="form-input"
-                value={amount} onChange={e => setAmount(e.target.value)}
-                placeholder="500,000"
-              />
-            </Field>
-            <Field label="Hình thức">
-              <select className="form-input" value={method} onChange={e => setMethod(e.target.value)}>
-                <option value="cash">Tiền mặt</option>
-                <option value="transfer">Chuyển khoản</option>
-                <option value="card">Thẻ ngân hàng</option>
-                <option value="momo">MoMo / Ví điện tử</option>
-              </select>
-            </Field>
-            <Field label="Ghi chú">
-              <input className="form-input" value={note} onChange={e => setNote(e.target.value)} placeholder="Ghi chú..." />
-            </Field>
-          </div>
-          <Button size="sm" onClick={handleAdd}>+ Thêm tạm ứng</Button>
-        </Card>
-      )}
-
-      {/* List */}
-      <Card title={`Lịch sử tạm ứng (${records.length})`}>
-        {records.length === 0 ? (
-          <p className="text-sm text-muted" style={{ textAlign: 'center', padding: '24px 0' }}>
-            Chưa có khoản tạm ứng nào
-          </p>
-        ) : (
-          <div className="table-wrapper">
-            <table>
-              <thead>
-                <tr>
-                  <th>#</th><th>Số tiền</th><th>Hình thức</th><th>Ghi chú</th><th>Thời gian</th>
-                </tr>
-              </thead>
-              <tbody>
-                {records.map((r, i) => (
-                  <tr key={r.id}>
-                    <td className="text-sm">{i + 1}</td>
-                    <td style={{ fontWeight: 700, color: 'var(--clr-primary)' }}>
-                      {Number(r.amount).toLocaleString('vi-VN')} ₫
-                    </td>
-                    <td className="text-sm">{r.method}</td>
-                    <td className="text-sm text-muted">{r.note || '—'}</td>
-                    <td className="text-xs text-muted">{r.time}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        )}
-      </Card>
-    </div>
-  );
-}
-
-// ── Appointment Panel (Hẹn khám) ─────────────────────────────────────────────
+// ── Appointment Panel (Hẹn khám) — tích hợp Appointment API ─────────────────
 function AppointmentPanel({ examId, disabled, onSaved, currentExam }: {
   examId: number; disabled: boolean; onSaved: () => void; currentExam: ExaminationResponse;
 }) {
-  const [date,    setDate]    = useState(currentExam.revisit_days
+  const [date,   setDate]   = useState(currentExam.revisit_days
     ? new Date(Date.now() + currentExam.revisit_days * 86400000).toISOString().slice(0, 10) : '');
-  const [days,    setDays]    = useState(String(currentExam.revisit_days ?? ''));
-  const [reason,  setReason]  = useState('');
-  const [doctor,  setDoctor]  = useState(currentExam.doctor_name ?? '');
+  const [days,   setDays]   = useState(String(currentExam.revisit_days ?? ''));
+  const [reason, setReason] = useState('');
+  const [doctor, setDoctor] = useState(currentExam.doctor_name ?? '');
   const saveAsync = useAsync<ExaminationResponse>();
 
   const handleSave = async () => {
+    // 1. Lưu revisit_days vào Examination
     const res = await saveAsync.run(examinationApi.update(examId, {
       revisit_days:   days ? Number(days) : undefined,
       revisit_result: reason || undefined,
       doctor_name:    doctor || undefined,
     }));
-    if (res) { toast.success('Đã lưu lịch hẹn'); onSaved(); }
-    else toast.error(saveAsync.error ?? 'Lưu thất bại');
+    if (!res) { toast.error(saveAsync.error ?? 'Lưu thất bại'); return; }
+
+    // 2. Tạo Appointment độc lập nếu có ngày hẹn
+    if (date && currentExam.patient_id) {
+      try {
+        const { appointmentApi } = await import('@api/appointment.api');
+        await appointmentApi.create({
+          patient_id:       currentExam.patient_id,
+          examination_id:   examId,
+          scheduled_date:   date,
+          appointment_type: 'revisit',
+          doctor_name:      doctor || undefined,
+          reason:           reason || undefined,
+        });
+      } catch {
+        // Không block nếu tạo appointment thất bại
+      }
+    }
+
+    toast.success('Đã lưu lịch hẹn');
+    onSaved();
   };
 
-  // Auto-calc days from date
   const handleDateChange = (d: string) => {
     setDate(d);
     if (d) {

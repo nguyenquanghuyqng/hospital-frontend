@@ -9,3 +9,7 @@ export { receptionApi }  from './reception.api';
 export { queueApi }      from './queue.api';
 export { doctorApi }     from './doctor.api';
 export { examinationApi } from './examination.api';
+export { catalogApi }    from './catalog.api';
+export { clinicalApi }   from './clinical.api';
+export { billingApi }    from './billing.api';
+export { appointmentApi } from './appointment.api';

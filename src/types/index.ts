@@ -13,6 +13,12 @@ export type PaymentType =
   | 'under6' | 'vaccine' | 'free' | 'defer';
 export type UserRole = 'doctor' | 'nurse' | 'receptionist' | 'cashier' | 'admin';
 
+// New enums
+export type ClsResultStatus = 'pending' | 'in_process' | 'completed' | 'cancelled';
+export type BillStatus = 'draft' | 'issued' | 'paid' | 'partial' | 'cancelled' | 'refunded';
+export type PaymentMethod = 'cash' | 'transfer' | 'card' | 'momo' | 'vnpay' | 'zalopay' | 'bhyt' | 'defer';
+export type AppointmentStatus = 'scheduled' | 'confirmed' | 'arrived' | 'completed' | 'cancelled' | 'no_show';
+
 // ─── Auth ────────────────────────────────────────────────────────────────────
 
 export interface User {
@@ -331,4 +337,183 @@ export interface ClinicRoomStatResponse {
 export interface ApiError {
   detail: string | Array<{ msg: string; loc: string[] }>;
   status: number;
+}
+
+// ─── CLS Result ───────────────────────────────────────────────────────────────
+
+export interface ClsResultValue {
+  id:             number;
+  cls_result_id:  number;
+  indicator_name: string;
+  indicator_code: string | null;
+  value_text:     string | null;
+  value_numeric:  number | null;
+  unit:           string | null;
+  ref_min:        number | null;
+  ref_max:        number | null;
+  ref_text:       string | null;
+  is_abnormal:    boolean;
+  sort_order:     number;
+}
+
+export interface ClsResultResponse {
+  id:                   number;
+  prescription_item_id: number;
+  examination_id:       number;
+  patient_id:           number;
+  service_code:         string | null;
+  service_name:         string;
+  department:           string | null;
+  status:               ClsResultStatus;
+  performed_at:         string | null;
+  result_at:            string | null;
+  performed_by:         string | null;
+  verified_by:          string | null;
+  result_summary:       string | null;
+  result_note:          string | null;
+  result_file_url:      string | null;
+  is_abnormal:          boolean;
+  values:               ClsResultValue[];
+  created_at:           string;
+  updated_at:           string;
+}
+
+export interface ClsResultUpdate {
+  status?:          ClsResultStatus;
+  performed_by?:    string;
+  verified_by?:     string;
+  result_summary?:  string;
+  result_note?:     string;
+  result_file_url?: string;
+  is_abnormal?:     boolean;
+  values?: Array<{
+    indicator_name:  string;
+    indicator_code?: string;
+    value_text?:     string;
+    value_numeric?:  number;
+    unit?:           string;
+    ref_min?:        number;
+    ref_max?:        number;
+    ref_text?:       string;
+    is_abnormal?:    boolean;
+    sort_order?:     number;
+  }>;
+}
+
+// ─── Drug Interaction ─────────────────────────────────────────────────────────
+
+export interface DrugWarning {
+  warning_type: 'duplicate_ingredient' | 'known_interaction';
+  severity:     'info' | 'warning' | 'danger';
+  drug_a_code:  string;
+  drug_a_name:  string;
+  drug_b_code:  string;
+  drug_b_name:  string;
+  ingredient:   string | null;
+  message:      string;
+}
+
+export interface DrugInteractionResponse {
+  has_warnings: boolean;
+  warnings:     DrugWarning[];
+}
+
+// ─── Billing ─────────────────────────────────────────────────────────────────
+
+export interface BillItemResponse {
+  id:                   number;
+  bill_id:              number;
+  prescription_item_id: number | null;
+  item_type:            string;
+  item_code:            string | null;
+  item_name:            string;
+  unit:                 string | null;
+  quantity:             number;
+  unit_price:           number | null;
+  payment_type:         PaymentType;
+  total_amount:         number | null;
+  bhyt_amount:          number | null;
+  patient_amount:       number | null;
+  sort_order:           number;
+}
+
+export interface PaymentResponse {
+  id:              number;
+  bill_id:         number;
+  cashier_id:      number | null;
+  payment_method:  PaymentMethod;
+  amount:          number;
+  paid_at:         string;
+  transaction_ref: string | null;
+  note:            string | null;
+  is_deposit:      boolean;
+  is_refund:       boolean;
+  created_at:      string;
+}
+
+export interface BillResponse {
+  id:               number;
+  bill_number:      string;
+  examination_id:   number | null;
+  patient_id:       number | null;
+  status:           BillStatus;
+  issued_at:        string | null;
+  paid_at:          string | null;
+  cashier_id:       number | null;
+  cashier_name:     string | null;
+  drug_total:       number;
+  cls_total:        number;
+  service_total:    number;
+  grand_total:      number;
+  bhyt_pays:        number;
+  patient_pays:     number;
+  discount_amount:  number;
+  deposit_amount:   number;
+  balance_due:      number;
+  insurance_number: string | null;
+  bhyt_approved_code: string | null;
+  note:             string | null;
+  items:            BillItemResponse[];
+  payments:         PaymentResponse[];
+  created_at:       string;
+  updated_at:       string;
+}
+
+// ─── Appointment ─────────────────────────────────────────────────────────────
+
+export interface AppointmentResponse {
+  id:               number;
+  appointment_no:   string;
+  patient_id:       number;
+  doctor_id:        number | null;
+  examination_id:   number | null;
+  scheduled_date:   string;
+  scheduled_time:   string | null;
+  status:           AppointmentStatus;
+  appointment_type: 'new' | 'revisit' | 'followup';
+  reason:           string | null;
+  doctor_name:      string | null;
+  department:       string | null;
+  clinic_room:      string | null;
+  note:             string | null;
+  patient_note:     string | null;
+  cancel_reason:    string | null;
+  is_reminded:      boolean;
+  created_at:       string;
+  updated_at:       string;
+}
+
+export interface AppointmentCreate {
+  patient_id:       number;
+  doctor_id?:       number;
+  examination_id?:  number;
+  scheduled_date:   string;
+  scheduled_time?:  string;
+  appointment_type?: 'new' | 'revisit' | 'followup';
+  reason?:          string;
+  doctor_name?:     string;
+  department?:      string;
+  clinic_room?:     string;
+  note?:            string;
+  patient_note?:    string;
 }

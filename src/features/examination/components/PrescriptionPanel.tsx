@@ -1,16 +1,20 @@
 /**
  * PrescriptionPanel — Đơn thuốc.
- * Hiển thị 2 nhóm tách biệt: Thuốc BHYT và Thuốc ngoài BHYT.
+ * Hiển thị 2 nhóm: Thuốc BHYT và Thuốc ngoài BHYT.
+ * Tích hợp cảnh báo tương tác / trùng hoạt chất thuốc real-time.
  */
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
 import toast from 'react-hot-toast';
 import { examinationApi } from '@api/examination.api';
+import { clinicalApi } from '@api/clinical.api';
 import { useAsync } from '@hooks/useAsync';
 import { Button, Field, EmptyState, Badge } from '@components/ui';
-import type { PrescriptionItemResponse } from '@/types';
+import type { PrescriptionItemResponse, DrugWarning } from '@/types';
+
+// ── Schema ────────────────────────────────────────────────────────────────────
 
 const schema = z.object({
   item_code:         z.string().optional(),
@@ -28,8 +32,15 @@ const schema = z.object({
 });
 type FormValues = z.infer<typeof schema>;
 
-// Common drug units
 const UNITS = ['viên', 'nang', 'gói', 'ống', 'chai', 'lọ', 'tuýp', 'hộp'];
+
+const SEVERITY_STYLE: Record<string, { bg: string; border: string; color: string; icon: string }> = {
+  danger:  { bg: '#fff1f2', border: '#fca5a5', color: '#991b1b', icon: '🚨' },
+  warning: { bg: '#fffbeb', border: '#fde68a', color: '#92400e', icon: '⚠️' },
+  info:    { bg: '#eff6ff', border: '#bfdbfe', color: '#1e40af', icon: 'ℹ️' },
+};
+
+// ── Props ─────────────────────────────────────────────────────────────────────
 
 interface Props {
   examId:    number;
@@ -38,23 +49,43 @@ interface Props {
   onChanged: () => void;
 }
 
+// ── Component ─────────────────────────────────────────────────────────────────
+
 export default function PrescriptionPanel({ examId, items, disabled, onChanged }: Props) {
-  const [adding,      setAdding]      = useState(false);
+  const [adding,      setAdding]   = useState(false);
   const [activeGroup, setActiveGroup] = useState<'bhyt' | 'ngoai_bhyt'>('bhyt');
+  const [warnings,    setWarnings] = useState<DrugWarning[]>([]);
+  const [showWarnings, setShowWarnings] = useState(true);
   const addAsync = useAsync<PrescriptionItemResponse>();
   const delAsync = useAsync<void>();
+
+  // Kiểm tra tương tác mỗi khi items thay đổi
+  const checkInteractions = useCallback(async () => {
+    const drugCodes = items
+      .filter(i => i.item_type === 'drug' && i.item_code)
+      .map(i => i.item_code as string);
+    if (drugCodes.length < 2) { setWarnings([]); return; }
+    try {
+      const res = await clinicalApi.checkInteractionsForExam(examId);
+      setWarnings(res.warnings);
+      if (res.has_warnings) setShowWarnings(true);
+    } catch {
+      // Không block workflow khi check thất bại
+    }
+  }, [examId, items]);
+
+  useEffect(() => { checkInteractions(); }, [checkInteractions]);
 
   const { register, handleSubmit, reset, watch, setValue, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { quantity: 1, payment_type: 'bhyt' },
   });
 
-  // ── Group items ─────────────────────────────────────────────────────────────
+  // Group items
   const drugsOnly    = items.filter(i => i.item_type === 'drug');
   const bhytDrugs    = drugsOnly.filter(i => i.payment_type === 'bhyt');
   const nonBhytDrugs = drugsOnly.filter(i => i.payment_type !== 'bhyt');
 
-  // Auto-build usage_instruction from morning/noon/afternoon/evening
   const morning   = watch('morning');
   const noon      = watch('noon');
   const afternoon = watch('afternoon');
@@ -67,8 +98,7 @@ export default function PrescriptionPanel({ examId, items, disabled, onChanged }
     if (noon)      parts.push(`Trưa ${noon}`);
     if (afternoon) parts.push(`Chiều ${afternoon}`);
     if (evening)   parts.push(`Tối ${evening}`);
-    const times = parts.join(', ');
-    return [times, howToUse].filter(Boolean).join(' — ');
+    return [[...parts].join(', '), howToUse].filter(Boolean).join(' — ');
   };
 
   const onAdd = async (data: FormValues) => {
@@ -98,21 +128,56 @@ export default function PrescriptionPanel({ examId, items, disabled, onChanged }
   };
 
   const fmtMoney = (v?: number | null) =>
-    v != null ? v.toLocaleString('vi-VN') + ' ₫' : '';
+    v != null ? Number(v).toLocaleString('vi-VN') + ' ₫' : '';
 
-  // Total per group
-  const bhytTotal    = bhytDrugs.reduce((s, i)    => s + (Number(i.total_amount) || 0), 0);
+  const bhytTotal    = bhytDrugs.reduce((s, i) => s + (Number(i.total_amount) || 0), 0);
   const nonBhytTotal = nonBhytDrugs.reduce((s, i) => s + (Number(i.total_amount) || 0), 0);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
 
-      {/* Group toggle */}
+      {/* ── Drug interaction warnings ──────────────────────────────────────── */}
+      {warnings.length > 0 && showWarnings && (
+        <div style={{
+          background: '#fffbeb', border: '1px solid #fde68a', borderRadius: 10,
+          padding: '12px 16px',
+        }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <span style={{ fontWeight: 700, fontSize: '.875rem', color: '#92400e' }}>
+              ⚠️ Cảnh báo tương tác thuốc ({warnings.length})
+            </span>
+            <button
+              onClick={() => setShowWarnings(false)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', color: '#92400e', fontSize: '.8rem' }}
+            >
+              Ẩn
+            </button>
+          </div>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            {warnings.map((w, i) => {
+              const st = SEVERITY_STYLE[w.severity] ?? SEVERITY_STYLE.warning;
+              return (
+                <div key={i} style={{
+                  background: st.bg, border: `1px solid ${st.border}`,
+                  borderRadius: 8, padding: '8px 12px',
+                }}>
+                  <div style={{ fontWeight: 700, fontSize: '.8rem', color: st.color, marginBottom: 2 }}>
+                    {st.icon} {w.drug_a_name} ↔ {w.drug_b_name}
+                  </div>
+                  <div style={{ fontSize: '.78rem', color: st.color }}>{w.message}</div>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* ── Group toggle ───────────────────────────────────────────────────── */}
       <div style={{ display: 'flex', gap: 0, background: 'var(--clr-gray-100)', borderRadius: 10, padding: 4 }}>
         {([
-          { key: 'bhyt',       label: `💊 Thuốc BHYT (${bhytDrugs.length})`,         total: bhytTotal    },
-          { key: 'ngoai_bhyt', label: `💊 Thuốc ngoài BHYT (${nonBhytDrugs.length})`, total: nonBhytTotal },
-        ] as const).map(g => (
+          { key: 'bhyt' as const,       label: `💊 BHYT (${bhytDrugs.length})`,         total: bhytTotal    },
+          { key: 'ngoai_bhyt' as const, label: `💊 Ngoài BHYT (${nonBhytDrugs.length})`, total: nonBhytTotal },
+        ]).map(g => (
           <button key={g.key} onClick={() => { setActiveGroup(g.key); setAdding(false); }}
             style={{
               flex: 1, padding: '8px 16px', border: 'none', borderRadius: 8, cursor: 'pointer',
@@ -124,7 +189,7 @@ export default function PrescriptionPanel({ examId, items, disabled, onChanged }
             }}>
             {g.label}
             {g.total > 0 && (
-              <span style={{ marginLeft: 8, fontSize: '.78rem', color: activeGroup === g.key ? 'var(--clr-primary)' : 'var(--clr-gray-400)' }}>
+              <span style={{ marginLeft: 6, fontSize: '.78rem', color: activeGroup === g.key ? 'var(--clr-primary)' : 'var(--clr-gray-400)' }}>
                 ({g.total.toLocaleString('vi-VN')} ₫)
               </span>
             )}
@@ -132,7 +197,7 @@ export default function PrescriptionPanel({ examId, items, disabled, onChanged }
         ))}
       </div>
 
-      {/* Drug list */}
+      {/* ── Drug list ──────────────────────────────────────────────────────── */}
       {(activeGroup === 'bhyt' ? bhytDrugs : nonBhytDrugs).length === 0 && !adding ? (
         <EmptyState
           icon="💊"
@@ -143,18 +208,15 @@ export default function PrescriptionPanel({ examId, items, disabled, onChanged }
         <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
           {(activeGroup === 'bhyt' ? bhytDrugs : nonBhytDrugs).map((item, idx) => (
             <DrugRow
-              key={item.id}
-              item={item}
-              idx={idx}
-              disabled={disabled}
-              onDelete={onDelete}
-              fmtMoney={fmtMoney}
+              key={item.id} item={item} idx={idx}
+              disabled={disabled} onDelete={onDelete} fmtMoney={fmtMoney}
+              hasWarning={warnings.some(w => w.drug_a_code === item.item_code || w.drug_b_code === item.item_code)}
             />
           ))}
         </div>
       )}
 
-      {/* Add form */}
+      {/* ── Add form ───────────────────────────────────────────────────────── */}
       {!disabled && (
         adding ? (
           <form onSubmit={handleSubmit(onAdd)}
@@ -206,34 +268,27 @@ export default function PrescriptionPanel({ examId, items, disabled, onChanged }
 
             {/* Dosage builder */}
             <div style={{ background: '#fff', border: '1px solid var(--clr-gray-200)', borderRadius: 8, padding: '12px 16px' }}>
-              <div className="text-xs text-muted" style={{ marginBottom: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' }}>
+              <div className="text-xs text-muted" style={{ marginBottom: 8, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '.06em' }}>
                 Liều dùng
               </div>
-              <div className="form-row form-row-3" style={{ marginBottom: 10 }}>
-                <Field label="Sáng">
-                  <input {...register('morning')} className="form-input" placeholder="1 viên" />
-                </Field>
-                <Field label="Trưa">
-                  <input {...register('noon')} className="form-input" placeholder="0" />
-                </Field>
-                <Field label="Chiều">
-                  <input {...register('afternoon')} className="form-input" placeholder="0" />
-                </Field>
-                <Field label="Tối">
-                  <input {...register('evening')} className="form-input" placeholder="1 viên" />
-                </Field>
+              <div className="form-row form-row-3">
+                {(['morning', 'noon', 'afternoon', 'evening'] as const).map((t, i) => (
+                  <Field key={t} label={['Sáng', 'Trưa', 'Chiều', 'Tối'][i]}>
+                    <input {...register(t)} className="form-input" placeholder="1 viên" />
+                  </Field>
+                ))}
                 <Field label="Cách dùng">
-                  <input {...register('how_to_use')} className="form-input" placeholder="sau ăn, trước ngủ..." />
+                  <input {...register('how_to_use')} className="form-input" placeholder="sau ăn..." />
                 </Field>
               </div>
               {(morning || noon || afternoon || evening) && (
-                <div style={{ padding: '8px 12px', background: 'var(--clr-primary-light)', borderRadius: 6, fontSize: '.83rem', color: 'var(--clr-primary-dark)' }}>
+                <div style={{ marginTop: 8, padding: '7px 12px', background: 'var(--clr-primary-light)', borderRadius: 6, fontSize: '.83rem', color: 'var(--clr-primary-dark)' }}>
                   📋 {buildInstruction()}
                 </div>
               )}
             </div>
 
-            <Field label="Hướng dẫn thêm (nếu có)">
+            <Field label="Hướng dẫn thêm">
               <input {...register('usage_instruction')} className="form-input"
                 placeholder="Nhập trực tiếp nếu không dùng ô liều ở trên" />
             </Field>
@@ -244,7 +299,8 @@ export default function PrescriptionPanel({ examId, items, disabled, onChanged }
             </div>
           </form>
         ) : (
-          <Button size="sm" variant="secondary" onClick={() => { setAdding(true); setValue('payment_type', activeGroup === 'bhyt' ? 'bhyt' : 'fee'); }}>
+          <Button size="sm" variant="secondary"
+            onClick={() => { setAdding(true); setValue('payment_type', activeGroup === 'bhyt' ? 'bhyt' : 'fee'); }}>
             + Thêm thuốc {activeGroup === 'bhyt' ? 'BHYT' : 'ngoài BHYT'}
           </Button>
         )
@@ -253,18 +309,22 @@ export default function PrescriptionPanel({ examId, items, disabled, onChanged }
   );
 }
 
-// ── Drug row ───────────────────────────────────────────────────────────────────
-function DrugRow({ item, idx, disabled, onDelete, fmtMoney }: {
+// ── DrugRow ───────────────────────────────────────────────────────────────────
+
+function DrugRow({ item, idx, disabled, onDelete, fmtMoney, hasWarning }: {
   item: PrescriptionItemResponse;
   idx: number;
   disabled: boolean;
+  hasWarning: boolean;
   onDelete: (id: number) => void;
   fmtMoney: (v?: number | null) => string;
 }) {
   return (
     <div style={{
       display: 'flex', alignItems: 'flex-start', gap: 12, padding: '11px 14px',
-      background: '#fff', border: '1px solid var(--clr-gray-100)', borderRadius: 8,
+      background: hasWarning ? '#fffbeb' : '#fff',
+      border: `1px solid ${hasWarning ? '#fde68a' : 'var(--clr-gray-100)'}`,
+      borderRadius: 8,
     }}>
       <span style={{
         minWidth: 26, height: 26, borderRadius: '50%', background: 'var(--clr-primary-light)',
@@ -275,7 +335,16 @@ function DrugRow({ item, idx, disabled, onDelete, fmtMoney }: {
       <div style={{ flex: 1, minWidth: 0 }}>
         <div style={{ fontWeight: 600, fontSize: '.875rem', color: 'var(--clr-gray-800)' }}>
           {item.item_name}
-          {item.item_code && <span style={{ marginLeft: 8, fontSize: '.75rem', color: 'var(--clr-gray-400)' }}>({item.item_code})</span>}
+          {item.item_code && (
+            <span style={{ marginLeft: 8, fontSize: '.75rem', color: 'var(--clr-gray-400)' }}>
+              ({item.item_code})
+            </span>
+          )}
+          {hasWarning && (
+            <span style={{ marginLeft: 8, fontSize: '.72rem', background: '#fef3c7', color: '#92400e', padding: '1px 7px', borderRadius: 999, fontWeight: 700 }}>
+              ⚠️ Cảnh báo
+            </span>
+          )}
         </div>
         <div className="flex gap-3 mt-1" style={{ flexWrap: 'wrap' }}>
           <span className="text-xs text-muted">SL: <strong>{item.quantity}</strong> {item.unit ?? ''}</span>

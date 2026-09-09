@@ -20,7 +20,8 @@ const NAV_ITEMS: NavItem[] = [
   { label: 'Tiếp đón',      icon: '🏥', to: ROUTES.RECEPTION,    permission: 'reception' },
   { label: 'Hàng chờ',      icon: '🎫', to: ROUTES.QUEUE,        permission: 'queue'     },
   { label: 'Phòng khám',    icon: '🩺', to: ROUTES.DOCTOR,       permission: 'doctor'    },
-  { label: 'Thu ngân',      icon: '💰', to: '/cashier',           permission: 'cashier'   },
+  { label: 'Thu ngân',      icon: '💰', to: ROUTES.CASHIER,      permission: 'cashier'   },
+  { label: 'Lịch hẹn',     icon: '📅', to: ROUTES.APPOINTMENTS, permission: 'reception' },
   { label: 'Quản trị',      icon: '⚙️',  to: ROUTES.ADMIN,        permission: 'admin'     },
 ];
 

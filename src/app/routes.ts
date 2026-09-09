@@ -26,6 +26,13 @@ export const ROUTES = {
   EXAMINATION:        '/examination/:receptionId',
   EXAMINATION_DETAIL: '/examination/view/:id',
 
+  // Cashier
+  CASHIER:            '/cashier',
+  CASHIER_BILL:       '/cashier/bill/:billId',
+
+  // Appointment
+  APPOINTMENTS:       '/appointments',
+
   // Admin
   ADMIN:              '/admin',
   ADMIN_USERS:        '/admin/users',
