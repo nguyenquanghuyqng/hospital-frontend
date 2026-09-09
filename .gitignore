@@ -1,31 +1,27 @@
 # ── Dependencies ─────────────────────────────────────────────
 node_modules/
 
-# ── Build output ─────────────────────────────────────────────
+# ── Build output (served bởi FastAPI static) ─────────────────
 dist/
-dist-ssr/
-build/
 
-# ── Environment / secrets ────────────────────────────────────
+# ── Environment (secrets & local overrides) ──────────────────
 .env
 .env.local
 .env.*.local
-
-# ── IDE / OS ─────────────────────────────────────────────────
-.vscode/
-.idea/
-*.swp
-*.swo
-.DS_Store
-Thumbs.db
-
-# ── Testing / coverage ───────────────────────────────────────
-coverage/
-.nyc_output/
-
-# ── Logs ─────────────────────────────────────────────────────
-*.log
-logs/
+# Giữ lại .env.example để team tham khảo
 
 # ── Vite cache ───────────────────────────────────────────────
 .vite/
+
+# ── TypeScript incremental build cache ───────────────────────
+*.tsbuildinfo
+
+# ── OS / IDE ──────────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# ── Logs ─────────────────────────────────────────────────────
+*.log
+npm-debug.log*
