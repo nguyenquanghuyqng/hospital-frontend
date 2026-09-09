@@ -57,13 +57,43 @@ export default function ExaminationPage() {
   const loadOrCreate = useCallback(async () => {
     if (!receptionId) return;
     const rid = Number(receptionId);
-    await receptionAsync.run(receptionApi.get(rid));
-    let exam = await examinationAsync.run(
-      examinationApi.getByReception(rid).catch(() => null as unknown as ExaminationResponse),
-    );
-    if (!exam) {
-      exam = await examinationAsync.run(examinationApi.create({ reception_id: rid }));
+
+    // Load reception trước để kiểm tra trạng thái
+    const rec = await receptionAsync.run(receptionApi.get(rid));
+
+    // Thử lấy phiếu đã có
+    let existingExam: ExaminationResponse | null = null;
+    try {
+      existingExam = await examinationApi.getByReception(rid);
+    } catch (err: unknown) {
+      // Chỉ bỏ qua 404 (chưa có phiếu) — các lỗi khác hiển thị ErrorState
+      const httpStatus = (err as { status?: number })?.status;
+      if (httpStatus !== 404) {
+        examinationAsync.run(Promise.reject(err));
+        return;
+      }
     }
+
+    if (existingExam) {
+      examinationAsync.run(Promise.resolve(existingExam));
+      return;
+    }
+
+    // Chưa có phiếu → tạo mới, nhưng chỉ khi reception đã checked_in
+    if (rec?.status !== 'checked_in') {
+      const statusLabel: Record<string, string> = {
+        pending:   'chưa được tiếp nhận (pending)',
+        completed: 'đã hoàn thành',
+        cancelled: 'đã huỷ',
+      };
+      const label = statusLabel[rec?.status ?? ''] ?? rec?.status ?? 'không hợp lệ';
+      examinationAsync.run(
+        Promise.reject(new Error(`Lượt tiếp đón ${label}, không thể mở phiếu khám`)),
+      );
+      return;
+    }
+
+    await examinationAsync.run(examinationApi.create({ reception_id: rid }));
   }, [receptionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { void loadOrCreate(); }, [loadOrCreate]);
@@ -171,7 +201,7 @@ export default function ExaminationPage() {
       </div>
 
       {/* ── Tab content ───────────────────────────────────────────────────── */}
-      <div style={{ padding: '20px 24px', maxWidth: 960, width: '100%', margin: '0 auto' }}>
+      <div style={{ padding: '20px 24px' }}>
 
         {/* ── Tab: Khám bệnh ──────────────────────────────────────────────── */}
         {activeTab === 'exam' && (

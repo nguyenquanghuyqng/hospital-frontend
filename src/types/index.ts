@@ -81,12 +81,30 @@ export interface PatientCreate {
   birth_year?: number | null;
   gender?: 'male' | 'female' | null;
   cccd?: string | null;
-  phone?: string | null;
-  address_province_name?: string | null;
-  address_district_name?: string | null;
-  address_ward_name?: string | null;
+  cccd_issued_by?: string | null;
+  cccd_issued_date?: string | null;
+  occupation?: string | null;
+  ethnicity_code?: string | null;
+  ethnicity_name?: string | null;
+  nationality_code?: string | null;
+  nationality_name?: string | null;
   address_street?: string | null;
-  [key: string]: unknown;
+  address_village?: string | null;
+  address_ward_code?: string | null;
+  address_ward_name?: string | null;
+  address_district_code?: string | null;
+  address_district_name?: string | null;
+  address_province_code?: string | null;
+  address_province_name?: string | null;
+  address?: string | null;
+  workplace?: string | null;
+  phone?: string | null;
+  email?: string | null;
+  policy_type?: string | null;
+  contact_name?: string | null;
+  contact_address?: string | null;
+  contact_phone?: string | null;
+  contact_cccd?: string | null;
 }
 
 // ─── Queue Ticket ────────────────────────────────────────────────────────────
@@ -166,12 +184,25 @@ export interface ReceptionCreate {
   subject_type?: string | null;
   subject_name?: string | null;
   insurance_number?: string | null;
+  insurance_valid_from?: string | null;
+  insurance_valid_to?: string | null;
+  initial_registration?: string | null;
+  referral_note?: string | null;
+  referral_facility?: string | null;
+  patient_category?: string | null;
+  patient_type?: string | null;
   priority?: number;
   reason?: string | null;
   is_appointment?: boolean;
   is_online?: boolean;
   is_referral?: boolean;
-  [key: string]: unknown;
+  high_tech_service?: boolean;
+  insurance_5years?: boolean;
+  insurance_5years_date?: string | null;
+  is_near_poor?: boolean;
+  is_poor?: boolean;
+  receptionist_name?: string | null;
+  internal_note?: string | null;
 }
 
 export interface ReceptionCheckIn {
@@ -275,6 +306,24 @@ export interface PaginatedResponse<T> {
   page: number;
   page_size: number;
   total_pages: number;
+}
+
+// ─── Clinic Room Stats ────────────────────────────────────────────────────────
+
+export interface ClinicRoomStat {
+  clinic_room: string;
+  total: number;
+  pending: number;
+  bhyt: number;
+  service: number;
+}
+
+export interface ClinicRoomStatResponse {
+  rooms: ClinicRoomStat[];
+  total_all: number;
+  total_pending: number;
+  total_bhyt: number;
+  total_service: number;
 }
 
 // ─── API Error ────────────────────────────────────────────────────────────────

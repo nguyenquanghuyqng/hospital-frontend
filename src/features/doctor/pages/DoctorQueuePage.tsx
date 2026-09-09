@@ -113,7 +113,7 @@ export default function DoctorQueuePage() {
                 onVisitStatus={handleVisitStatus}
                 onDone={() => setDoneTarget(item)}
                 onTransfer={() => setTransferTarget(item)}
-                onExamine={() => navigate(toPath(ROUTES.DOCTOR_PATIENT, { receptionId: item.id }))}
+                onExamine={() => navigate(toPath(ROUTES.EXAMINATION, { receptionId: item.id }))}
               />
             ))}
           </div>
