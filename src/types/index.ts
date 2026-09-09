@@ -274,11 +274,17 @@ export interface PrescriptionItemResponse {
   quantity: number;
   unit_price: number | null;
   usage_instruction: string | null;
+  valid_from: string | null;
+  valid_to: string | null;
   payment_type: PaymentType;
   total_amount: number | null;
   bhyt_amount: number | null;
   patient_amount: number | null;
+  room_name: string | null;
+  doctor_name: string | null;
   sort_order: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface ExaminationResponse {
@@ -287,21 +293,52 @@ export interface ExaminationResponse {
   patient_id: number;
   doctor_id: number | null;
   doctor_name: string | null;
+  nurse_name: string | null;
   status: ExaminationStatus;
   exam_date: string;
   exam_start_at: string | null;
   exam_end_at: string | null;
+  exam_end_date: string | null;
   subject_type: string | null;
   subject_name: string | null;
   insurance_number: string | null;
+  insurance_valid_from: string | null;
+  insurance_valid_to: string | null;
+  referral_from_type: string | null;
+  referral_from_name: string | null;
+  referral_diagnosis: string | null;
   clinical_symptoms: string | null;
   complications: string | null;
   disposition: DispositionType | null;
   revisit_days: number | null;
+  revisit_result: string | null;
+  transfer_to_facility: string | null;
+  transfer_reason: string | null;
+  admit_ward: string | null;
+  admit_priority: boolean;
+  is_near_poor: boolean;
+  is_poor: boolean;
+  flag_priority: boolean;
   diagnoses: DiagnosisResponse[];
   prescription_items: PrescriptionItemResponse[];
   created_at: string;
   updated_at: string;
+}
+
+/** Tóm tắt lịch sử khám — dùng cho ExamHistoryTree */
+export interface ExaminationListItem {
+  id: number;
+  reception_id: number;
+  exam_date: string;
+  exam_start_at: string | null;
+  exam_end_at: string | null;
+  status: ExaminationStatus;
+  doctor_name: string | null;
+  nurse_name: string | null;
+  clinic_room: string | null;
+  disposition: DispositionType | null;
+  diagnoses_summary: string | null;
+  created_at: string;
 }
 
 // ─── Pagination ───────────────────────────────────────────────────────────────

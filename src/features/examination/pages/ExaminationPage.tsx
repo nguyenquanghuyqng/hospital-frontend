@@ -1,72 +1,95 @@
 /**
- * ExaminationPage — Phiếu khám bệnh đầy đủ chức năng bác sĩ.
+ * ExaminationPage — Phiếu khám bệnh (refactored)
  *
- * Layout: Header cố định (thông tin BN + actions) + Tab navigation + Tab content
+ * Layout 3 cột:
+ *   [Sidebar BN 260px] | [Form chính scroll] | [Bảng kê đơn 420px]
  *
- * Tabs:
- *  1. Khám bệnh      — triệu chứng, chẩn đoán, dấu hiệu sinh tồn
- *  2. Đơn thuốc      — BHYT + ngoài BHYT tách biệt
- *  3. Chỉ định CLS   — danh sách chỉ định + cập nhật kết quả
- *  4. Tạm ứng        — chỉ định tạm ứng viện phí
- *  5. Hẹn khám       — phiếu hẹn tái khám
- *  6. Giấy BHXH      — giấy nghỉ hưởng BHXH
- *  7. Chi phí         — tổng hợp chi phí
+ * Luồng nghiệp vụ:
+ *   loadOrCreate → hiển thị phiếu
+ *   Các section (II, III) tự auto-save khi blur
+ *   Nút cuối màn hình: Tiếp | Lưu | Bỏ qua | Chuyển viện | In chi phí | Kết thúc
+ *
+ * Tabs phụ (dưới bảng kê đơn):
+ *   Hẹn khám | Giấy BHXH | Tạm ứng | Chi phí | Viện phí
  */
-import { useEffect, useCallback, useState } from 'react';
+import { useEffect, useCallback, useState, lazy, Suspense } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { examinationApi } from '@api/examination.api';
 import { receptionApi } from '@api/reception.api';
+import { patientApi } from '@api/patient.api';
 import { useAsync } from '@hooks/useAsync';
-import { Button, Card, StatusBadge, LoadingOverlay, ErrorState, ConfirmDialog, Field } from '@components/ui';
-import { fmtDate, fmtDateTime } from '@lib/utils';
+import {
+  Button, Card, LoadingOverlay, ErrorState, ConfirmDialog, Field,
+} from '@components/ui';
 import { ROUTES } from '@/app/routes';
-import type { ExaminationResponse, ReceptionResponse } from '@/types';
-import DiagnosisPanel from '../components/DiagnosisPanel';
-import PrescriptionPanel from '../components/PrescriptionPanel';
-import ClsPanel from '../components/ClsPanel';
+import type { ExaminationResponse, ReceptionResponse, PatientResponse } from '@/types';
 
-// ── Tab definitions ────────────────────────────────────────────────────────────
-type TabId = 'exam' | 'prescription' | 'cls' | 'deposit' | 'appointment' | 'bhxh' | 'cost';
+// ── Feature components ─────────────────────────────────────────────────────────
+import PatientInfoSidebar from '../components/PatientInfoSidebar';
+import ExaminationForm    from '../components/ExaminationForm';
+import ExamInfoSection    from '../components/ExamInfoSection';
+import OrdersTable        from '../components/OrdersTable';
 
-interface Tab { id: TabId; icon: string; label: string }
+// ── Lazy-loaded sub-panels (tabs phụ) ─────────────────────────────────────────
+const PrescriptionPanel = lazy(() => import('../components/PrescriptionPanel'));
+const ClsPanel          = lazy(() => import('../components/ClsPanel'));
+const BillingPanel      = lazy(() => import('../components/BillingPanel'));
 
-const TABS: Tab[] = [
-  { id: 'exam',        icon: '🩺', label: 'Khám bệnh'     },
-  { id: 'prescription',icon: '💊', label: 'Đơn thuốc'     },
-  { id: 'cls',         icon: '🔬', label: 'Chỉ định CLS'  },
-  { id: 'deposit',     icon: '💰', label: 'Tạm ứng'       },
-  { id: 'appointment', icon: '📅', label: 'Hẹn khám'      },
-  { id: 'bhxh',        icon: '📄', label: 'Giấy BHXH'     },
-  { id: 'cost',        icon: '🧾', label: 'Chi phí'        },
+// ── Disposition → action button label ─────────────────────────────────────────
+const SAVE_LABEL_BY_DISPOSITION: Record<string, string> = {
+  discharged:     '✅ Khám xong cho về',
+  chronic_script: '💊 Cấp toa cho về',
+  revisit:        '📅 Lưu & Hẹn tái khám',
+  inpatient:      '🏥 Lưu & Nhập viện',
+  transfer_out:   '🚑 Lưu & Chuyển tuyến',
+  outpatient:     '🏠 Lưu ngoại trú',
+  emergency:      '🚨 Lưu cấp cứu',
+};
+
+// ── Sub-tab for right panel ────────────────────────────────────────────────────
+type SubTab = 'orders' | 'prescription' | 'cls' | 'appointment' | 'bhxh' | 'deposit' | 'cost' | 'billing';
+
+const SUB_TABS: { id: SubTab; icon: string; label: string }[] = [
+  { id: 'orders',       icon: '📋', label: 'Kê đơn'       },
+  { id: 'prescription', icon: '💊', label: 'Đơn thuốc'    },
+  { id: 'cls',          icon: '🔬', label: 'CLS'           },
+  { id: 'appointment',  icon: '📅', label: 'Hẹn khám'     },
+  { id: 'bhxh',         icon: '📄', label: 'Giấy BHXH'    },
+  { id: 'deposit',      icon: '💰', label: 'Tạm ứng'      },
+  { id: 'cost',         icon: '🧾', label: 'Chi phí'       },
+  { id: 'billing',      icon: '🏦', label: 'Viện phí'      },
 ];
 
-// ── Main component ─────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Main component
+// ─────────────────────────────────────────────────────────────────────────────
+
 export default function ExaminationPage() {
   const { receptionId } = useParams<{ receptionId: string }>();
   const navigate = useNavigate();
 
   const receptionAsync   = useAsync<ReceptionResponse>();
   const examinationAsync = useAsync<ExaminationResponse>();
+  const patientAsync     = useAsync<PatientResponse>();
   const actionAsync      = useAsync<ExaminationResponse>();
 
-  const [activeTab,       setActiveTab]       = useState<TabId>('exam');
+  const [activeSubTab,    setActiveSubTab]    = useState<SubTab>('orders');
   const [confirmComplete, setConfirmComplete] = useState(false);
+  const [confirmSkip,     setConfirmSkip]     = useState(false);
+  const [confirmTransfer, setConfirmTransfer] = useState(false);
 
   // ── Load / create ──────────────────────────────────────────────────────────
   const loadOrCreate = useCallback(async () => {
     if (!receptionId) return;
     const rid = Number(receptionId);
 
-    // Load reception trước để kiểm tra trạng thái
     const rec = await receptionAsync.run(receptionApi.get(rid));
 
-    // Thử lấy phiếu đã có
     let existingExam: ExaminationResponse | null = null;
     try {
       existingExam = await examinationApi.getByReception(rid);
     } catch (err: unknown) {
-      // Chỉ bỏ qua 404 (chưa có phiếu) — các lỗi khác hiển thị ErrorState
       const httpStatus = (err as { status?: number })?.status;
       if (httpStatus !== 404) {
         examinationAsync.run(Promise.reject(err));
@@ -76,10 +99,11 @@ export default function ExaminationPage() {
 
     if (existingExam) {
       examinationAsync.run(Promise.resolve(existingExam));
+      // Load patient đầy đủ (PatientResponse) song song
+      if (existingExam.patient_id) patientAsync.run(patientApi.get(existingExam.patient_id));
       return;
     }
 
-    // Chưa có phiếu → tạo mới, nhưng chỉ khi reception đã checked_in
     if (rec?.status !== 'checked_in') {
       const statusLabel: Record<string, string> = {
         pending:   'chưa được tiếp nhận (pending)',
@@ -93,367 +117,444 @@ export default function ExaminationPage() {
       return;
     }
 
-    await examinationAsync.run(examinationApi.create({ reception_id: rid }));
+    const newExam = await examinationAsync.run(examinationApi.create({ reception_id: rid }));
+    if (newExam?.patient_id) patientAsync.run(patientApi.get(newExam.patient_id));
   }, [receptionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { void loadOrCreate(); }, [loadOrCreate]);
 
   const reload = useCallback(() => {
-    if (receptionId) examinationAsync.run(examinationApi.getByReception(Number(receptionId)));
+    if (receptionId)
+      examinationAsync.run(examinationApi.getByReception(Number(receptionId)));
   }, [receptionId]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // ── Actions ────────────────────────────────────────────────────────────────
+  // ── Action handlers ────────────────────────────────────────────────────────
+
+  /** Tiếp: lưu và chuyển sang bệnh nhân tiếp theo trong hàng đợi */
+  const handleNext = async () => {
+    if (!exam) return;
+    const res = await actionAsync.run(examinationApi.save(exam.id));
+    if (res) { toast.success('Đã lưu — chuyển bệnh nhân tiếp theo'); navigate(ROUTES.DOCTOR); }
+    else toast.error(actionAsync.error ?? 'Lưu thất bại');
+  };
+
+  /** Lưu: lưu trạng thái hiện tại */
   const handleSave = async () => {
-    if (!examinationAsync.data) return;
-    const res = await actionAsync.run(examinationApi.save(examinationAsync.data.id));
+    if (!exam) return;
+    const res = await actionAsync.run(examinationApi.save(exam.id));
     if (res) { toast.success('Đã lưu phiếu khám'); reload(); }
     else toast.error(actionAsync.error ?? 'Lưu thất bại');
   };
 
-  const handleComplete = async () => {
-    if (!examinationAsync.data) return;
-    const res = await actionAsync.run(examinationApi.complete(examinationAsync.data.id));
-    if (res) { toast.success('Đã kết thúc khám!'); navigate(ROUTES.DOCTOR); }
+  /** Bỏ qua: skip bệnh nhân, quay lại hàng đợi */
+  const handleSkip = async () => {
+    if (!exam) return;
+    const res = await actionAsync.run(examinationApi.skip(exam.id));
+    if (res) { toast.success('Đã bỏ qua — quay lại hàng đợi'); navigate(ROUTES.DOCTOR); }
     else toast.error(actionAsync.error ?? 'Thất bại');
   };
 
+  /** Kết thúc: hoàn tất phiếu khám */
+  const handleComplete = async () => {
+    if (!exam) return;
+    const res = await actionAsync.run(examinationApi.complete(exam.id));
+    if (res) { toast.success('Kết thúc khám thành công!'); navigate(ROUTES.DOCTOR); }
+    else toast.error(actionAsync.error ?? 'Thất bại');
+  };
+
+  /** Chuyển viện: mark chuyển tuyến rồi navigate về doctor */
+  const handleTransfer = async () => {
+    if (!exam) return;
+    await actionAsync.run(examinationApi.update(exam.id, { disposition: 'transfer_out' }));
+    toast.success('Đã ghi nhận chuyển viện');
+    reload();
+    setConfirmTransfer(false);
+  };
+
+  /** In chi phí */
+  const handlePrintCost = () => window.print();
+
   // ── Guards ─────────────────────────────────────────────────────────────────
   if (receptionAsync.loading || examinationAsync.loading) return <LoadingOverlay />;
-  if (examinationAsync.error) return <ErrorState message={examinationAsync.error} onRetry={loadOrCreate} />;
+  if (examinationAsync.error) return (
+    <ErrorState message={examinationAsync.error} onRetry={loadOrCreate} />
+  );
+
   const exam = examinationAsync.data;
   const rec  = receptionAsync.data;
   if (!exam) return null;
 
-  const isCompleted = exam.status === 'completed';
-  const p = rec?.patient;
+  const isCompleted  = exam.status === 'completed';
+  const p            = patientAsync.data ?? null;
+  const saveLabel    = exam.disposition
+    ? (SAVE_LABEL_BY_DISPOSITION[exam.disposition] ?? '💾 Lưu')
+    : '💾 Lưu';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', background: 'var(--clr-gray-50)' }}>
+    <div style={{
+      display: 'flex', flexDirection: 'column',
+      minHeight: '100vh', background: 'var(--clr-gray-50)',
+    }}>
 
-      {/* ── Sticky header ─────────────────────────────────────────────────── */}
+      {/* ══ Sticky header ═══════════════════════════════════════════════════ */}
       <div style={{
-        position: 'sticky', top: 'var(--header-h)', zIndex: 50,
-        background: '#fff', borderBottom: '1px solid var(--clr-gray-100)',
-        boxShadow: 'var(--shadow-sm)',
+        position: 'sticky', top: 'var(--header-h, 56px)', zIndex: 50,
+        background: '#fff', borderBottom: '2px solid var(--clr-primary)',
+        boxShadow: '0 2px 8px rgba(0,0,0,.08)',
       }}>
-        {/* Patient bar */}
-        <div style={{ padding: '10px 24px', display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap' }}>
-          <Button variant="ghost" size="sm" onClick={() => navigate(-1)}>←</Button>
+        <div style={{
+          display: 'flex', alignItems: 'center', gap: 12,
+          padding: '8px 20px', flexWrap: 'wrap',
+        }}>
+          {/* Back */}
+          <button
+            onClick={() => navigate(-1)}
+            style={{
+              background: 'none', border: 'none', cursor: 'pointer',
+              fontSize: '1.1rem', color: 'var(--clr-gray-500)', padding: '4px 8px',
+            }}
+            aria-label="Quay lại"
+          >←</button>
 
-          {/* Patient info compact */}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0 }}>
-            <div style={{
-              width: 40, height: 40, borderRadius: '50%', background: 'var(--clr-primary-light)',
-              color: 'var(--clr-primary-dark)', display: 'flex', alignItems: 'center',
-              justifyContent: 'center', fontWeight: 800, fontSize: '.95rem', flexShrink: 0,
-            }}>
-              {(p?.full_name ?? '?')[0]}
+          {/* Tiêu đề */}
+          <div style={{ flex: 1, minWidth: 0 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10, flexWrap: 'wrap' }}>
+              <span style={{ fontWeight: 800, fontSize: '1rem', color: 'var(--clr-gray-900)' }}>
+                📋 Phiếu khám
+              </span>
+              <span style={{
+                fontSize: '.78rem', fontFamily: 'monospace',
+                background: 'var(--clr-primary-light)', color: 'var(--clr-primary-dark)',
+                padding: '2px 8px', borderRadius: 6,
+              }}>#{exam.reception_id}</span>
+              <ExamStatusBadge status={exam.status} />
+              {rec?.clinic_room && (
+                <span style={{ fontSize: '.78rem', color: 'var(--clr-gray-500)' }}>
+                  📍 {rec.clinic_room}
+                </span>
+              )}
+              {exam.exam_date && (
+                <span style={{ fontSize: '.78rem', color: 'var(--clr-gray-500)' }}>
+                  📅 {new Date(exam.exam_date).toLocaleDateString('vi-VN')}
+                </span>
+              )}
             </div>
-            <div style={{ minWidth: 0 }}>
-              <div style={{ fontWeight: 700, fontSize: '1rem', color: 'var(--clr-gray-900)' }} className="truncate">
-                {p?.full_name ?? `BN #${exam.patient_id}`}
-              </div>
-              <div className="flex gap-3">
-                <span className="text-xs text-muted">{p?.birth_year ?? '—'}</span>
-                <span className="text-xs text-muted">{p?.gender === 'male' ? 'Nam' : p?.gender === 'female' ? 'Nữ' : '—'}</span>
-                {rec?.clinic_room && <span className="text-xs text-muted">📍 {rec.clinic_room}</span>}
-                {rec?.subject_name && <span className="text-xs" style={{ color: 'var(--clr-primary-dark)' }}>🏥 {rec.subject_name}</span>}
-                {exam.insurance_number && <span className="text-xs text-muted">🎫 {exam.insurance_number}</span>}
-              </div>
+            <div style={{ fontSize: '.82rem', color: 'var(--clr-gray-600)', marginTop: 1 }}>
+              {p?.full_name ?? `BN #${exam.patient_id}`}
+              {p?.birth_year && <span style={{ marginLeft: 8, color: 'var(--clr-gray-400)' }}>{new Date().getFullYear() - p.birth_year} tuổi</span>}
+              {p?.gender && <span style={{ marginLeft: 8, color: 'var(--clr-gray-400)' }}>{p.gender === 'male' ? 'Nam' : 'Nữ'}</span>}
             </div>
           </div>
 
-          <StatusBadge status={exam.status} />
-
+          {/* ── Action buttons ───────────────────────────────────────────── */}
           {!isCompleted && (
-            <div className="flex gap-2">
-              <Button variant="secondary" size="sm" loading={actionAsync.loading} onClick={handleSave}>
-                💾 Lưu tạm
+            <div style={{ display: 'flex', gap: 6, flexWrap: 'wrap', alignItems: 'center' }}>
+              <Button size="sm" variant="ghost" onClick={handleNext} loading={actionAsync.loading} title="Lưu và chuyển BN tiếp theo">
+                ⏭ Tiếp
+              </Button>
+              <Button size="sm" variant="secondary" onClick={handleSave} loading={actionAsync.loading}>
+                {saveLabel}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmSkip(true)}>
+                ⏸ Bỏ qua
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmTransfer(true)}>
+                🚑 Chuyển viện
+              </Button>
+              <Button size="sm" variant="ghost" onClick={handlePrintCost}>
+                🖨️ In chi phí
               </Button>
               <Button size="sm" onClick={() => setConfirmComplete(true)}>
-                ✅ Kết thúc khám
+                🏁 Kết thúc
+              </Button>
+            </div>
+          )}
+
+          {isCompleted && (
+            <div style={{ display: 'flex', gap: 6 }}>
+              <Button size="sm" variant="ghost" onClick={handlePrintCost}>
+                🖨️ In chi phí
+              </Button>
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* ══ Body: 3-column layout ════════════════════════════════════════════ */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: '260px 1fr 420px',
+        gap: 0,
+        flex: 1,
+        alignItems: 'start',
+        minHeight: 0,
+      }}>
+
+        {/* ─── Col 1: Sidebar ────────────────────────────────────────────── */}
+        <div style={{
+          position: 'sticky', top: 'calc(var(--header-h, 56px) + 53px)',
+          height: 'calc(100vh - var(--header-h, 56px) - 53px)',
+          overflowY: 'auto',
+          background: '#fff',
+          borderRight: '1px solid var(--clr-gray-100)',
+        }}>
+          <PatientInfoSidebar
+            exam={exam}
+            reception={rec ?? null}
+            patient={p}
+          />
+        </div>
+
+        {/* ─── Col 2: Main form ──────────────────────────────────────────── */}
+        <div style={{
+          padding: '16px 20px',
+          display: 'flex', flexDirection: 'column', gap: 12,
+          overflowY: 'auto',
+          borderRight: '1px solid var(--clr-gray-100)',
+        }}>
+
+          {/* Section II: Thông tin vào */}
+          <SectionHeader roman="II" title="Thông tin vào" />
+          <ExaminationForm
+            exam={exam}
+            disabled={isCompleted}
+            onUpdated={reload}
+          />
+
+          {/* Section III: Thông tin khám */}
+          <SectionHeader roman="III" title="Thông tin khám" />
+          <ExamInfoSection
+            exam={exam}
+            disabled={isCompleted}
+            onUpdated={reload}
+          />
+
+          {/* Bottom action bar (mirror header cho màn hình nhỏ) */}
+          {!isCompleted && (
+            <div style={{
+              position: 'sticky', bottom: 0,
+              background: '#fff', borderTop: '1px solid var(--clr-gray-200)',
+              padding: '10px 0',
+              display: 'flex', gap: 8, flexWrap: 'wrap',
+              zIndex: 10,
+            }}>
+              <Button size="sm" variant="ghost" onClick={handleNext} loading={actionAsync.loading}>
+                ⏭ Tiếp
+              </Button>
+              <Button size="sm" variant="secondary" onClick={handleSave} loading={actionAsync.loading}>
+                {saveLabel}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmSkip(true)}>
+                ⏸ Bỏ qua
+              </Button>
+              <Button size="sm" variant="ghost" onClick={() => setConfirmTransfer(true)}>
+                🚑 Chuyển viện
+              </Button>
+              <Button size="sm" variant="ghost" onClick={handlePrintCost}>
+                🖨️ In chi phí
+              </Button>
+              <Button size="sm" onClick={() => setConfirmComplete(true)}>
+                🏁 Kết thúc
               </Button>
             </div>
           )}
         </div>
 
-        {/* Tab bar */}
-        <div style={{ display: 'flex', gap: 0, overflowX: 'auto', padding: '0 24px' }}>
-          {TABS.map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => setActiveTab(tab.id)}
-              style={{
-                display: 'flex', alignItems: 'center', gap: 6,
-                padding: '10px 16px',
-                border: 'none', background: 'transparent', cursor: 'pointer',
-                fontFamily: 'var(--font-sans)', fontSize: '.85rem', fontWeight: 500,
-                color: activeTab === tab.id ? 'var(--clr-primary)' : 'var(--clr-gray-500)',
-                borderBottom: `2px solid ${activeTab === tab.id ? 'var(--clr-primary)' : 'transparent'}`,
-                transition: 'all .15s',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              <span>{tab.icon}</span> {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
+        {/* ─── Col 3: Kê đơn + tabs phụ ─────────────────────────────────── */}
+        <div style={{
+          position: 'sticky', top: 'calc(var(--header-h, 56px) + 53px)',
+          height: 'calc(100vh - var(--header-h, 56px) - 53px)',
+          overflowY: 'auto',
+          background: '#fff',
+          display: 'flex', flexDirection: 'column',
+        }}>
 
-      {/* ── Tab content ───────────────────────────────────────────────────── */}
-      <div style={{ padding: '20px 24px' }}>
-
-        {/* ── Tab: Khám bệnh ──────────────────────────────────────────────── */}
-        {activeTab === 'exam' && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-            {/* Lý do khám */}
-            {rec?.reason && (
-              <Card title="Lý do khám">
-                <p style={{ fontSize: '.9rem', color: 'var(--clr-gray-700)', lineHeight: 1.7 }}>{rec.reason}</p>
-              </Card>
-            )}
-
-            {/* Dấu hiệu sinh tồn */}
-            <Card title="🫀 Dấu hiệu sinh tồn">
-              <VitalSignsEditor examId={exam.id} disabled={isCompleted} onSaved={reload} currentExam={exam} />
-            </Card>
-
-            {/* Triệu chứng lâm sàng */}
-            <Card title="📋 Triệu chứng lâm sàng">
-              <SymptomsEditor
-                examId={exam.id}
-                value={exam.clinical_symptoms ?? ''}
-                disabled={isCompleted}
-                onSaved={reload}
-              />
-            </Card>
-
-            {/* Chẩn đoán */}
-            <Card title="🏷 Chẩn đoán ICD-10">
-              <DiagnosisPanel
-                examId={exam.id}
-                diagnoses={exam.diagnoses}
-                disabled={isCompleted}
-                onChanged={reload}
-              />
-            </Card>
+          {/* Sub-tab bar */}
+          <div style={{
+            display: 'flex', overflowX: 'auto', flexShrink: 0,
+            borderBottom: '2px solid var(--clr-gray-100)',
+          }}>
+            {SUB_TABS.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setActiveSubTab(t.id)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 4,
+                  padding: '8px 12px', border: 'none', background: 'transparent',
+                  cursor: 'pointer', fontFamily: 'var(--font-sans)', fontSize: '.78rem',
+                  fontWeight: activeSubTab === t.id ? 700 : 400,
+                  color: activeSubTab === t.id ? 'var(--clr-primary)' : 'var(--clr-gray-500)',
+                  borderBottom: `2px solid ${activeSubTab === t.id ? 'var(--clr-primary)' : 'transparent'}`,
+                  whiteSpace: 'nowrap', flexShrink: 0,
+                  marginBottom: -2,
+                }}
+              >
+                {t.icon} {t.label}
+              </button>
+            ))}
           </div>
-        )}
 
-        {/* ── Tab: Đơn thuốc ──────────────────────────────────────────────── */}
-        {activeTab === 'prescription' && (
-          <PrescriptionPanel
-            examId={exam.id}
-            items={exam.prescription_items}
-            disabled={isCompleted}
-            onChanged={reload}
-          />
-        )}
+          {/* Tab content */}
+          <div style={{ flex: 1, overflowY: 'auto', padding: '12px 14px' }}>
+            <Suspense fallback={<LoadingOverlay />}>
 
-        {/* ── Tab: Chỉ định CLS ───────────────────────────────────────────── */}
-        {activeTab === 'cls' && (
-          <ClsPanel
-            examId={exam.id}
-            items={exam.prescription_items.filter(i => i.item_type === 'cls')}
-            disabled={isCompleted}
-            onChanged={reload}
-          />
-        )}
+              {activeSubTab === 'orders' && (
+                <OrdersTable
+                  examId={exam.id}
+                  items={exam.prescription_items}
+                  disabled={isCompleted}
+                  onChanged={reload}
+                />
+              )}
 
-        {/* ── Tab: Viện phí ───────────────────────────────────────────────── */}
-        {activeTab === 'billing' && (
-          <BillingPanel
-            examId={exam.id}
-            patientName={p?.full_name}
-            canEdit={canEditBilling}
-          />
-        )}
+              {activeSubTab === 'prescription' && (
+                <PrescriptionPanel
+                  examId={exam.id}
+                  items={exam.prescription_items}
+                  disabled={isCompleted}
+                  onChanged={reload}
+                />
+              )}
 
-        {/* ── Tab: Hẹn khám ───────────────────────────────────────────────── */}
-        {activeTab === 'appointment' && (
-          <AppointmentPanel examId={exam.id} disabled={isCompleted} onSaved={reload} currentExam={exam} />
-        )}
+              {activeSubTab === 'cls' && (
+                <ClsPanel
+                  examId={exam.id}
+                  items={exam.prescription_items.filter(i => i.item_type === 'cls')}
+                  disabled={isCompleted}
+                  onChanged={reload}
+                />
+              )}
 
-        {/* ── Tab: Giấy BHXH ──────────────────────────────────────────────── */}
-        {activeTab === 'bhxh' && (
-          <BhxhPanel
-            examId={exam.id}
-            disabled={isCompleted}
-            onSaved={reload}
-            patient={p}
-            exam={exam}
-          />
-        )}
+              {activeSubTab === 'appointment' && (
+                <AppointmentSubPanel exam={exam} disabled={isCompleted} onUpdated={reload} />
+              )}
 
-        {/* ── Tab: Chi phí ────────────────────────────────────────────────── */}
-        {activeTab === 'cost' && (
-          <CostSummaryPanel examId={exam.id} />
-        )}
+              {activeSubTab === 'bhxh' && (
+                <BhxhSubPanel exam={exam} patient={p} disabled={isCompleted} />
+              )}
+
+              {activeSubTab === 'deposit' && (
+                <DepositSubPanel />
+              )}
+
+              {activeSubTab === 'cost' && (
+                <CostSubPanel examId={exam.id} />
+              )}
+
+              {activeSubTab === 'billing' && (
+                <BillingPanel
+                  examId={exam.id}
+                  patientName={p?.full_name}
+                  canEdit={!isCompleted}
+                />
+              )}
+
+            </Suspense>
+          </div>
+        </div>
+
       </div>
 
+      {/* ══ Confirm dialogs ══════════════════════════════════════════════════ */}
       <ConfirmDialog
         open={confirmComplete}
         onClose={() => setConfirmComplete(false)}
         onConfirm={handleComplete}
         title="Kết thúc khám"
         message="Xác nhận kết thúc phiếu khám? Sau khi kết thúc bạn không thể chỉnh sửa thêm."
-        confirmLabel="Kết thúc"
+        confirmLabel="🏁 Kết thúc"
+      />
+      <ConfirmDialog
+        open={confirmSkip}
+        onClose={() => setConfirmSkip(false)}
+        onConfirm={handleSkip}
+        title="Bỏ qua bệnh nhân"
+        message="Bệnh nhân này sẽ được đưa trở lại hàng đợi. Tiếp tục?"
+        confirmLabel="⏸ Bỏ qua"
+      />
+      <ConfirmDialog
+        open={confirmTransfer}
+        onClose={() => setConfirmTransfer(false)}
+        onConfirm={handleTransfer}
+        title="Chuyển viện"
+        message="Xác nhận chuyển bệnh nhân này sang cơ sở y tế khác? Hướng xử trí sẽ được ghi nhận là Chuyển tuyến."
+        confirmLabel="🚑 Chuyển viện"
       />
     </div>
   );
 }
 
-// ═══════════════════════════════════════════════════════════════════════════════
-// Sub-panels (tất cả self-contained, tiêu chí 1: không chứa business logic)
-// ═══════════════════════════════════════════════════════════════════════════════
+// ─────────────────────────────────────────────────────────────────────────────
+// Helper components (nhỏ, tự thân)
+// ─────────────────────────────────────────────────────────────────────────────
 
-// ── Vital Signs ───────────────────────────────────────────────────────────────
-interface VitalSigns {
-  temperature: string; blood_pressure: string;
-  heart_rate: string;  respiratory_rate: string;
-  spo2: string;        weight: string; height: string;
-}
-
-interface VitalSignsProps {
-  examId: number; disabled: boolean;
-  onSaved: () => void; currentExam: ExaminationResponse;
-}
-
-function VitalSignsEditor({ examId, disabled, onSaved, currentExam }: VitalSignsProps) {
-  // Parse from complications field (reuse existing column for vitals JSON)
-  const parseVitals = (): VitalSigns => {
-    try {
-      if (currentExam.complications?.startsWith('{')) {
-        return JSON.parse(currentExam.complications) as VitalSigns;
-      }
-    } catch { /* ignore */ }
-    return { temperature: '', blood_pressure: '', heart_rate: '', respiratory_rate: '', spo2: '', weight: '', height: '' };
-  };
-
-  const [vitals, setVitals] = useState<VitalSigns>(parseVitals);
-  const saveAsync = useAsync<ExaminationResponse>();
-
-  const handleSave = async () => {
-    const res = await saveAsync.run(
-      examinationApi.update(examId, { complications: JSON.stringify(vitals) }),
-    );
-    if (res) { toast.success('Đã lưu dấu hiệu sinh tồn'); onSaved(); }
-    else toast.error(saveAsync.error ?? 'Lưu thất bại');
-  };
-
-  const set = (key: keyof VitalSigns) => (e: React.ChangeEvent<HTMLInputElement>) =>
-    setVitals(v => ({ ...v, [key]: e.target.value }));
-
+function SectionHeader({ roman, title }: { roman: string; title: string }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      <div className="form-row form-row-3">
-        <VitalField label="Nhiệt độ (°C)"        value={vitals.temperature}      onChange={set('temperature')}      placeholder="36.5"     disabled={disabled} />
-        <VitalField label="Huyết áp (mmHg)"       value={vitals.blood_pressure}   onChange={set('blood_pressure')}   placeholder="120/80"   disabled={disabled} />
-        <VitalField label="Nhịp tim (lần/phút)"   value={vitals.heart_rate}       onChange={set('heart_rate')}       placeholder="80"       disabled={disabled} />
-        <VitalField label="Nhịp thở (lần/phút)"  value={vitals.respiratory_rate} onChange={set('respiratory_rate')} placeholder="18"       disabled={disabled} />
-        <VitalField label="SpO₂ (%)"              value={vitals.spo2}             onChange={set('spo2')}             placeholder="98"       disabled={disabled} />
-        <VitalField label="Cân nặng (kg)"         value={vitals.weight}           onChange={set('weight')}           placeholder="60"       disabled={disabled} />
-        <VitalField label="Chiều cao (cm)"        value={vitals.height}           onChange={set('height')}           placeholder="165"      disabled={disabled} />
-        {vitals.weight && vitals.height && (
-          <div>
-            <div className="text-xs text-muted" style={{ marginBottom: 4 }}>BMI</div>
-            <div style={{ fontSize: '1.1rem', fontWeight: 700, color: 'var(--clr-primary)' }}>
-              {(Number(vitals.weight) / ((Number(vitals.height) / 100) ** 2)).toFixed(1)}
-            </div>
-          </div>
-        )}
-      </div>
-      {!disabled && (
-        <div>
-          <Button size="sm" variant="secondary" loading={saveAsync.loading} onClick={handleSave}>
-            💾 Lưu dấu hiệu sinh tồn
-          </Button>
-        </div>
-      )}
+    <div style={{
+      display: 'flex', alignItems: 'center', gap: 10,
+      padding: '6px 0',
+    }}>
+      <div style={{
+        width: 28, height: 28, borderRadius: '50%',
+        background: 'var(--clr-primary)', color: '#fff',
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        fontSize: '.75rem', fontWeight: 800, flexShrink: 0,
+      }}>{roman}</div>
+      <span style={{ fontWeight: 800, fontSize: '.9rem', color: 'var(--clr-gray-800)' }}>
+        {title}
+      </span>
+      <div style={{ flex: 1, height: 1, background: 'var(--clr-gray-200)' }} />
     </div>
   );
 }
 
-function VitalField({ label, value, onChange, placeholder, disabled }: {
-  label: string; value: string;
-  onChange: (e: React.ChangeEvent<HTMLInputElement>) => void;
-  placeholder: string; disabled: boolean;
-}) {
-  return (
-    <div>
-      <div className="text-xs text-muted" style={{ marginBottom: 4 }}>{label}</div>
-      <input
-        value={value} onChange={onChange} placeholder={placeholder} disabled={disabled}
-        className="form-input" style={{ textAlign: 'center', fontWeight: 600 }}
-      />
-    </div>
-  );
-}
-
-// ── Symptoms Editor ────────────────────────────────────────────────────────────
-function SymptomsEditor({ examId, value, disabled, onSaved }: {
-  examId: number; value: string; disabled: boolean; onSaved: () => void;
-}) {
-  const [text, setText] = useState(value);
-  const saveAsync = useAsync<ExaminationResponse>();
-  useEffect(() => { setText(value); }, [value]);
-
-  const handleBlur = async () => {
-    if (text === value || disabled) return;
-    const res = await saveAsync.run(examinationApi.update(examId, { clinical_symptoms: text }));
-    if (res) { toast.success('Đã lưu triệu chứng'); onSaved(); }
-    else toast.error(saveAsync.error ?? 'Lưu thất bại');
+function ExamStatusBadge({ status }: { status: string }) {
+  const map: Record<string, { label: string; bg: string; color: string }> = {
+    draft:     { label: 'Đang khám',  bg: '#dbeafe', color: '#1d4ed8' },
+    saved:     { label: 'Đã lưu',    bg: '#fef3c7', color: '#92400e' },
+    completed: { label: '✅ Hoàn tất', bg: '#d1fae5', color: '#065f46' },
   };
-
+  const st = map[status] ?? map.draft;
   return (
-    <textarea
-      className="form-input" rows={5} value={text} disabled={disabled}
-      placeholder="Mô tả triệu chứng, dấu hiệu lâm sàng, tiền sử bệnh..."
-      onChange={e => setText(e.target.value)}
-      onBlur={handleBlur}
-    />
+    <span style={{
+      fontSize: '.75rem', fontWeight: 700, padding: '2px 10px', borderRadius: 999,
+      background: st.bg, color: st.color,
+    }}>{st.label}</span>
   );
 }
 
-// ── Appointment Panel (Hẹn khám) — tích hợp Appointment API ─────────────────
-function AppointmentPanel({ examId, disabled, onSaved, currentExam }: {
-  examId: number; disabled: boolean; onSaved: () => void; currentExam: ExaminationResponse;
-}) {
-  const [date,   setDate]   = useState(currentExam.revisit_days
-    ? new Date(Date.now() + currentExam.revisit_days * 86400000).toISOString().slice(0, 10) : '');
-  const [days,   setDays]   = useState(String(currentExam.revisit_days ?? ''));
+// ── AppointmentSubPanel ────────────────────────────────────────────────────────
+
+function AppointmentSubPanel({
+  exam, disabled, onUpdated,
+}: { exam: ExaminationResponse; disabled: boolean; onUpdated: () => void }) {
+  const [date,   setDate]   = useState(
+    exam.revisit_days ? new Date(Date.now() + exam.revisit_days * 86400000).toISOString().slice(0, 10) : '',
+  );
+  const [days,   setDays]   = useState(String(exam.revisit_days ?? ''));
   const [reason, setReason] = useState('');
-  const [doctor, setDoctor] = useState(currentExam.doctor_name ?? '');
+  const [doctor, setDoctor] = useState(exam.doctor_name ?? '');
   const saveAsync = useAsync<ExaminationResponse>();
 
   const handleSave = async () => {
-    // 1. Lưu revisit_days vào Examination
-    const res = await saveAsync.run(examinationApi.update(examId, {
+    const res = await saveAsync.run(examinationApi.update(exam.id, {
       revisit_days:   days ? Number(days) : undefined,
       revisit_result: reason || undefined,
       doctor_name:    doctor || undefined,
     }));
     if (!res) { toast.error(saveAsync.error ?? 'Lưu thất bại'); return; }
-
-    // 2. Tạo Appointment độc lập nếu có ngày hẹn
-    if (date && currentExam.patient_id) {
+    if (date && exam.patient_id) {
       try {
         const { appointmentApi } = await import('@api/appointment.api');
         await appointmentApi.create({
-          patient_id:       currentExam.patient_id,
-          examination_id:   examId,
-          scheduled_date:   date,
-          appointment_type: 'revisit',
-          doctor_name:      doctor || undefined,
-          reason:           reason || undefined,
+          patient_id:     exam.patient_id, examination_id: exam.id,
+          scheduled_date: date, appointment_type: 'revisit',
+          doctor_name: doctor || undefined, reason: reason || undefined,
         });
-      } catch {
-        // Không block nếu tạo appointment thất bại
-      }
+      } catch { /* không block */ }
     }
-
     toast.success('Đã lưu lịch hẹn');
-    onSaved();
+    onUpdated();
   };
 
   const handleDateChange = (d: string) => {
@@ -467,53 +568,44 @@ function AppointmentPanel({ examId, disabled, onSaved, currentExam }: {
   const handleDaysChange = (d: string) => {
     setDays(d);
     if (d && Number(d) > 0) {
-      const target = new Date(Date.now() + Number(d) * 86400000);
-      setDate(target.toISOString().slice(0, 10));
+      setDate(new Date(Date.now() + Number(d) * 86400000).toISOString().slice(0, 10));
     }
   };
 
   return (
     <Card title="📅 Phiếu hẹn tái khám">
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-        {/* Appointment preview */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
         {date && (
           <div style={{
-            padding: '16px 20px', background: '#f0fdf4', border: '1px solid #86efac',
-            borderRadius: 12, display: 'flex', alignItems: 'center', gap: 16,
+            padding: '12px 16px', background: '#f0fdf4',
+            border: '1px solid #86efac', borderRadius: 10,
           }}>
-            <span style={{ fontSize: '2rem' }}>📅</span>
-            <div>
-              <div style={{ fontWeight: 700, fontSize: '1.05rem', color: '#166534' }}>
-                Hẹn ngày: {new Date(date).toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
-              </div>
-              {days && <div style={{ fontSize: '.85rem', color: '#16a34a' }}>Sau {days} ngày kể từ hôm nay</div>}
+            <div style={{ fontWeight: 700, color: '#166534' }}>
+              📅 {new Date(date).toLocaleDateString('vi-VN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' })}
             </div>
+            {days && <div style={{ fontSize: '.82rem', color: '#16a34a', marginTop: 2 }}>Sau {days} ngày</div>}
           </div>
         )}
-
         <div className="form-row form-row-2">
-          <Field label="Ngày hẹn tái khám">
+          <Field label="Ngày hẹn">
             <input type="date" className="form-input" value={date} disabled={disabled}
               min={new Date().toISOString().slice(0, 10)}
               onChange={e => handleDateChange(e.target.value)} />
           </Field>
-          <Field label="Số ngày (tự động tính)">
+          <Field label="Số ngày">
             <input type="number" className="form-input" value={days} disabled={disabled}
-              min={1} placeholder="VD: 30" onChange={e => handleDaysChange(e.target.value)} />
+              min={1} placeholder="30" onChange={e => handleDaysChange(e.target.value)} />
           </Field>
         </div>
-
         <Field label="Bác sĩ phụ trách">
           <input className="form-input" value={doctor} disabled={disabled}
             placeholder="Bác sĩ khám lần sau..." onChange={e => setDoctor(e.target.value)} />
         </Field>
-
-        <Field label="Lý do hẹn / dặn dò bệnh nhân">
+        <Field label="Dặn dò bệnh nhân">
           <textarea className="form-input" rows={3} value={reason} disabled={disabled}
-            placeholder="Tái khám kiểm tra, uống thuốc đúng giờ, hạn chế ăn mặn..."
+            placeholder="Tái khám kiểm tra, uống thuốc đúng giờ..."
             onChange={e => setReason(e.target.value)} />
         </Field>
-
         {!disabled && (
           <Button size="sm" variant="secondary" loading={saveAsync.loading} onClick={handleSave}>
             💾 Lưu lịch hẹn
@@ -524,209 +616,190 @@ function AppointmentPanel({ examId, disabled, onSaved, currentExam }: {
   );
 }
 
-// ── BHXH Panel (Giấy nghỉ hưởng BHXH) ────────────────────────────────────────
-interface BhxhProps {
-  examId: number; disabled: boolean; onSaved: () => void;
-  patient?: { full_name: string; birth_year?: number | null; gender?: string | null } | null;
-  exam: ExaminationResponse;
-}
+// ── BhxhSubPanel ──────────────────────────────────────────────────────────────
 
-function BhxhPanel({ disabled, patient, exam }: BhxhProps) {
-  const [form, setForm] = useState({
-    days:       '3',
-    from_date:  new Date().toISOString().slice(0, 10),
-    to_date:    '',
-    diagnosis:  '',
-    workplace:  '',
-    note:       '',
-  });
-
-  // Auto calc to_date
-  const calcToDate = (fromDate: string, daysStr: string) => {
-    if (!fromDate || !daysStr) return '';
-    const d = new Date(fromDate);
-    d.setDate(d.getDate() + Number(daysStr) - 1);
-    return d.toISOString().slice(0, 10);
+function BhxhSubPanel({
+  exam, patient, disabled,
+}: { exam: ExaminationResponse; patient: PatientResponse | null; disabled: boolean }) {
+  const calcTo = (from: string, d: string) => {
+    if (!from || !d) return '';
+    const dt = new Date(from); dt.setDate(dt.getDate() + Number(d) - 1);
+    return dt.toISOString().slice(0, 10);
   };
+  const today = new Date().toISOString().slice(0, 10);
+  const [form, setForm] = useState({ days: '3', from_date: today, to_date: calcTo(today, '3'), diagnosis: '', workplace: '', note: '' });
+  const primaryDiag = exam.diagnoses.find(d => d.is_primary) ?? exam.diagnoses[0];
 
   const set = (key: keyof typeof form) => (
     e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
   ) => {
-    const updated = { ...form, [key]: e.target.value };
-    if (key === 'days' || key === 'from_date') {
-      updated.to_date = calcToDate(
-        key === 'from_date' ? e.target.value : form.from_date,
-        key === 'days'      ? e.target.value : form.days,
-      );
-    }
-    setForm(updated);
+    const upd = { ...form, [key]: e.target.value };
+    if (key === 'days' || key === 'from_date')
+      upd.to_date = calcTo(key === 'from_date' ? e.target.value : form.from_date, key === 'days' ? e.target.value : form.days);
+    setForm(upd);
   };
-
-  // Init to_date
-  useEffect(() => {
-    setForm(f => ({ ...f, to_date: calcToDate(f.from_date, f.days) }));
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const handlePrint = () => {
-    window.print();
-    toast.success('Đang in giấy BHXH...');
-  };
-
-  const primaryDiagnosis = exam.diagnoses.find(d => d.is_primary) ?? exam.diagnoses[0];
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="📄 Thông tin giấy nghỉ hưởng BHXH">
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
-          {/* Patient info readonly */}
-          <div style={{ padding: '12px 16px', background: 'var(--clr-gray-50)', borderRadius: 8 }}>
-            <div className="form-row form-row-3">
-              <div><span className="text-xs text-muted">Họ tên:</span> <strong>{patient?.full_name ?? '—'}</strong></div>
-              <div><span className="text-xs text-muted">Năm sinh:</span> <strong>{patient?.birth_year ?? '—'}</strong></div>
-              <div><span className="text-xs text-muted">Giới tính:</span> <strong>{patient?.gender === 'male' ? 'Nam' : 'Nữ'}</strong></div>
-            </div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <Card title="📄 Giấy nghỉ hưởng BHXH">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          <div style={{ padding: '10px 12px', background: 'var(--clr-gray-50)', borderRadius: 8, fontSize: '.82rem' }}>
+            <strong>{patient?.full_name ?? '—'}</strong>
+            {patient?.birth_year && <span style={{ marginLeft: 10 }}>{patient.birth_year}</span>}
+            {patient?.gender && <span style={{ marginLeft: 10 }}>{patient.gender === 'male' ? 'Nam' : 'Nữ'}</span>}
           </div>
-
           <div className="form-row form-row-3">
             <Field label="Số ngày nghỉ">
               <select className="form-input" value={form.days} disabled={disabled} onChange={set('days')}>
-                {[1,2,3,4,5,7,10,14,21,28,30].map(d => (
-                  <option key={d} value={d}>{d} ngày</option>
-                ))}
+                {[1,2,3,4,5,7,10,14,21,28,30].map(d => <option key={d} value={d}>{d} ngày</option>)}
               </select>
             </Field>
             <Field label="Từ ngày">
               <input type="date" className="form-input" value={form.from_date} disabled={disabled} onChange={set('from_date')} />
             </Field>
-            <Field label="Đến ngày (tự tính)">
+            <Field label="Đến ngày">
               <input type="date" className="form-input" value={form.to_date} readOnly
                 style={{ background: 'var(--clr-gray-100)', fontWeight: 600 }} />
             </Field>
           </div>
-
-          <Field label="Chẩn đoán (điền vào giấy BHXH)">
-            <input
-              className="form-input" value={form.diagnosis} disabled={disabled}
-              placeholder={primaryDiagnosis?.icd_name ?? 'Chẩn đoán...'}
-              defaultValue={primaryDiagnosis?.icd_name ?? ''}
-              onChange={set('diagnosis')}
-            />
+          <Field label="Chẩn đoán">
+            <input className="form-input" value={form.diagnosis} disabled={disabled}
+              placeholder={primaryDiag?.icd_name ?? 'Chẩn đoán...'}
+              onChange={set('diagnosis')} />
           </Field>
-
-          <Field label="Nơi làm việc của bệnh nhân">
+          <Field label="Nơi làm việc">
             <input className="form-input" value={form.workplace} disabled={disabled}
               placeholder="Tên công ty / cơ quan..." onChange={set('workplace')} />
           </Field>
-
-          <Field label="Ghi chú thêm">
+          <Field label="Ghi chú">
             <textarea className="form-input" rows={2} value={form.note} disabled={disabled}
-              placeholder="Dặn dò, hướng dẫn thêm..." onChange={set('note')} />
+              placeholder="Dặn dò thêm..." onChange={set('note')} />
           </Field>
+          {!disabled && (
+            <Button size="sm" variant="secondary" onClick={() => { window.print(); toast.success('Đang in...'); }}>
+              🖨️ In giấy BHXH
+            </Button>
+          )}
         </div>
-      </Card>
-
-      {/* Preview */}
-      <Card title="Xem trước giấy BHXH">
-        <div style={{
-          padding: '28px 32px', border: '2px solid var(--clr-gray-200)', borderRadius: 8,
-          fontFamily: 'serif', fontSize: '.9rem', lineHeight: 2,
-          background: '#fff',
-        }} id="bhxh-print">
-          <div style={{ textAlign: 'center', marginBottom: 20 }}>
-            <div style={{ fontWeight: 700, fontSize: '1.1rem', textTransform: 'uppercase' }}>
-              CỘNG HÒA XÃ HỘI CHỦ NGHĨA VIỆT NAM
-            </div>
-            <div style={{ fontSize: '.85rem' }}>Độc lập – Tự do – Hạnh phúc</div>
-            <div style={{ marginTop: 16, fontWeight: 700, fontSize: '1.15rem', textTransform: 'uppercase' }}>
-              GIẤY CHỨNG NHẬN NGHỈ VIỆC HƯỞNG BHXH
-            </div>
-          </div>
-
-          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '.85rem' }}>
-            <tbody>
-              <BhxhRow label="Họ và tên"   value={patient?.full_name} />
-              <BhxhRow label="Năm sinh"    value={patient?.birth_year} />
-              <BhxhRow label="Nơi làm việc" value={form.workplace || '...........'} />
-              <BhxhRow label="Chẩn đoán"   value={form.diagnosis || primaryDiagnosis?.icd_name || '...........'} />
-              <BhxhRow label="Cho nghỉ"    value={`${form.days} ngày`} />
-              <BhxhRow label="Từ ngày"     value={form.from_date ? new Date(form.from_date).toLocaleDateString('vi-VN') : ''} />
-              <BhxhRow label="Đến ngày"    value={form.to_date ? new Date(form.to_date).toLocaleDateString('vi-VN') : ''} />
-              {form.note && <BhxhRow label="Ghi chú" value={form.note} />}
-            </tbody>
-          </table>
-
-          <div style={{ marginTop: 32, display: 'flex', justifyContent: 'space-between', fontSize: '.85rem' }}>
-            <div style={{ textAlign: 'center', width: '45%' }}>
-              <div style={{ fontWeight: 600 }}>Bệnh nhân / Người nhận</div>
-              <div style={{ marginTop: 48, borderTop: '1px solid #333' }}>(Ký, ghi rõ họ tên)</div>
-            </div>
-            <div style={{ textAlign: 'center', width: '45%' }}>
-              <div>{form.from_date ? `Ngày ${new Date(form.from_date).toLocaleDateString('vi-VN', { day: 'numeric' })} tháng ${new Date(form.from_date).toLocaleDateString('vi-VN', { month: 'numeric' })} năm ${new Date(form.from_date).getFullYear()}` : '....../....../......'}</div>
-              <div style={{ fontWeight: 600 }}>Y, Bác sĩ ký tên</div>
-              <div style={{ marginTop: 48, borderTop: '1px solid #333' }}>{exam.doctor_name ?? '(Ký, đóng dấu)'}</div>
-            </div>
-          </div>
-        </div>
-
-        {!disabled && (
-          <div className="flex gap-2" style={{ marginTop: 16 }}>
-            <Button size="sm" variant="secondary" onClick={handlePrint}>🖨️ In giấy</Button>
-          </div>
-        )}
       </Card>
     </div>
   );
 }
 
-function BhxhRow({ label, value }: { label: string; value?: string | number | null }) {
+// ── DepositSubPanel ───────────────────────────────────────────────────────────
+
+function DepositSubPanel() {
+  const [amount, setAmount] = useState('');
+  const [method, setMethod] = useState('cash');
+  const [note,   setNote]   = useState('');
+  const [records, setRecords] = useState<Array<{ id: number; amount: string; method: string; note: string; time: string }>>([]);
+  const total = records.reduce((s, r) => s + Number(r.amount), 0);
+
+  const handleAdd = () => {
+    if (!amount || Number(amount) <= 0) { toast.error('Nhập số tiền hợp lệ'); return; }
+    setRecords(prev => [...prev, {
+      id: Date.now(), amount, method, note,
+      time: new Date().toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' }),
+    }]);
+    setAmount(''); setNote('');
+    toast.success('Đã thêm tạm ứng');
+  };
+
   return (
-    <tr>
-      <td style={{ width: '30%', paddingRight: 8, fontWeight: 600, verticalAlign: 'top', paddingBottom: 6 }}>{label}:</td>
-      <td style={{ paddingBottom: 6 }}>{value ?? '—'}</td>
-    </tr>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{
+        padding: '12px 16px', background: 'var(--clr-primary-light)', borderRadius: 10,
+        display: 'flex', justifyContent: 'space-between',
+      }}>
+        <span style={{ fontSize: '.9rem', color: 'var(--clr-primary-dark)' }}>Tổng tạm ứng</span>
+        <span style={{ fontSize: '1.2rem', fontWeight: 800, color: 'var(--clr-primary)' }}>
+          {total.toLocaleString('vi-VN')} ₫
+        </span>
+      </div>
+      <Card title="Thêm tạm ứng">
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+          <div className="form-row form-row-2">
+            <Field label="Số tiền (₫)" required>
+              <input type="number" min={0} step={1000} className="form-input"
+                value={amount} onChange={e => setAmount(e.target.value)} placeholder="500000" />
+            </Field>
+            <Field label="Hình thức">
+              <select className="form-input" value={method} onChange={e => setMethod(e.target.value)}>
+                <option value="cash">💵 Tiền mặt</option>
+                <option value="transfer">🏦 Chuyển khoản</option>
+                <option value="card">💳 Thẻ</option>
+                <option value="momo">📱 Ví điện tử</option>
+              </select>
+            </Field>
+          </div>
+          <Field label="Ghi chú">
+            <input className="form-input" value={note} onChange={e => setNote(e.target.value)} placeholder="Ghi chú..." />
+          </Field>
+          <Button size="sm" onClick={handleAdd}>+ Thêm tạm ứng</Button>
+        </div>
+      </Card>
+      {records.length > 0 && (
+        <Card title={`Danh sách tạm ứng (${records.length})`}>
+          {records.map(r => (
+            <div key={r.id} style={{
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              padding: '8px 0', borderBottom: '1px solid var(--clr-gray-100)', fontSize: '.85rem',
+            }}>
+              <div>
+                <div style={{ fontWeight: 600 }}>{Number(r.amount).toLocaleString('vi-VN')} ₫</div>
+                <div style={{ fontSize: '.75rem', color: 'var(--clr-gray-400)' }}>
+                  {r.method} • {r.time} {r.note && `• ${r.note}`}
+                </div>
+              </div>
+              <button onClick={() => setRecords(prev => prev.filter(x => x.id !== r.id))}
+                style={{ background: 'none', border: 'none', cursor: 'pointer', color: 'var(--clr-danger)' }}>
+                ✕
+              </button>
+            </div>
+          ))}
+        </Card>
+      )}
+    </div>
   );
 }
 
-// ── Cost Summary Panel ────────────────────────────────────────────────────────
-function CostSummaryPanel({ examId }: { examId: number }) {
-  const { data, loading, run } = useAsync<Record<string, number>>();
-  const [refreshKey, setRefreshKey] = useState(0);
+// ── CostSubPanel ──────────────────────────────────────────────────────────────
 
-  useEffect(() => { run(examinationApi.cost(examId)); }, [examId, refreshKey]); // eslint-disable-line react-hooks/exhaustive-deps
+function CostSubPanel({ examId }: { examId: number }) {
+  const { data, loading, run } = useAsync<Record<string, number>>();
+  const [key, setKey] = useState(0);
+  useEffect(() => { run(examinationApi.cost(examId)); }, [examId, key]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const fmt = (v?: number) => v !== undefined ? v.toLocaleString('vi-VN') + ' ₫' : '—';
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-      <Card title="🧾 Tổng hợp chi phí"
-        actions={<Button size="sm" variant="ghost" onClick={() => setRefreshKey(k => k + 1)}>↻ Cập nhật</Button>}
-      >
-        {loading ? (
-          <LoadingOverlay />
-        ) : !data ? (
-          <p className="text-sm text-muted" style={{ textAlign: 'center', padding: 24 }}>Chưa có dữ liệu chi phí</p>
-        ) : (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 0 }}>
+    <Card title="🧾 Tổng hợp chi phí"
+      actions={<Button size="sm" variant="ghost" onClick={() => setKey(k => k + 1)}>↻</Button>}
+    >
+      {loading ? <LoadingOverlay /> : !data
+        ? <p style={{ textAlign: 'center', color: 'var(--clr-gray-400)', padding: 20, fontSize: '.85rem' }}>Chưa có dữ liệu</p>
+        : (
+          <div>
             {[
-              { label: '💊 Tiền thuốc',        key: 'drug_total',     color: 'var(--clr-primary)'  },
-              { label: '🔬 Tiền CLS',           key: 'cls_total',      color: 'var(--clr-primary)'  },
-              { label: '📋 Tổng cộng',          key: 'total',          color: 'var(--clr-gray-800)', bold: true },
-              { label: '🏥 BHYT chi trả',       key: 'bhyt_total',     color: '#059669' },
-              { label: '👤 Bệnh nhân chi trả',  key: 'patient_total',  color: 'var(--clr-danger)',  bold: true },
-            ].map(item => (
-              <div key={item.key} style={{
-                display: 'flex', justifyContent: 'space-between', alignItems: 'center',
-                padding: '12px 0', borderBottom: '1px solid var(--clr-gray-100)',
+              { label: '💊 Thuốc',          key: 'drug_total',    color: 'var(--clr-primary)' },
+              { label: '🔬 CLS',            key: 'cls_total',     color: 'var(--clr-primary)' },
+              { label: '📋 Tổng cộng',      key: 'total',         color: 'var(--clr-gray-800)', bold: true },
+              { label: '🏥 BHYT chi trả',   key: 'bhyt_total',    color: '#059669' },
+              { label: '👤 BN chi trả (CCT)', key: 'patient_total', color: '#dc2626', bold: true },
+            ].map(row => (
+              <div key={row.key} style={{
+                display: 'flex', justifyContent: 'space-between', padding: '10px 0',
+                borderBottom: '1px solid var(--clr-gray-100)',
               }}>
-                <span style={{ fontSize: '.9rem', color: 'var(--clr-gray-600)' }}>{item.label}</span>
-                <span style={{ fontSize: item.bold ? '1.1rem' : '1rem', fontWeight: item.bold ? 800 : 600, color: item.color }}>
-                  {fmt(data[item.key])}
+                <span style={{ fontSize: '.875rem', color: 'var(--clr-gray-600)' }}>{row.label}</span>
+                <span style={{ fontWeight: row.bold ? 800 : 600, fontSize: row.bold ? '1rem' : '.9rem', color: row.color }}>
+                  {fmt(data[row.key])}
                 </span>
               </div>
             ))}
           </div>
-        )}
-      </Card>
-    </div>
+        )
+      }
+    </Card>
   );
 }
