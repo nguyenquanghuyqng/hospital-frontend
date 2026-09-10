@@ -14,7 +14,7 @@ import { Button, EmptyState, ErrorState, LoadingOverlay, Pagination } from '@com
 import { fmtDateTime } from '@lib/utils';
 import type { PaginatedResponse } from '@/types';
 
-type TabId = 'config' | 'audit';
+type TabId = 'config' | 'national' | 'audit';
 
 const GROUP_LABELS: Record<string, string> = {
   facility: '🏥 Thông tin cơ sở',
@@ -40,8 +40,9 @@ export default function ConfigPage() {
       {/* Tab bar */}
       <div style={{ display: 'flex', borderBottom: '2px solid var(--clr-gray-100)', marginBottom: 20 }}>
         {([
-          { id: 'config', label: '⚙️ Cấu hình cơ sở' },
-          { id: 'audit',  label: '📋 Nhật ký thay đổi' },
+          { id: 'config',  label: '⚙️ Cấu hình cơ sở' },
+          { id: 'national', label: '🔗 Liên thông BYT' },
+          { id: 'audit',   label: '📋 Nhật ký thay đổi' },
         ] as { id: TabId; label: string }[]).map(t => (
           <button key={t.id} onClick={() => setActiveTab(t.id)}
             style={{
@@ -56,8 +57,9 @@ export default function ConfigPage() {
         ))}
       </div>
 
-      {activeTab === 'config' && <ConfigTab />}
-      {activeTab === 'audit'  && <AuditTab />}
+      {activeTab === 'config'   && <ConfigTab />}
+      {activeTab === 'national' && <NationalConfigTab />}
+      {activeTab === 'audit'    && <AuditTab />}
     </div>
   );
 }

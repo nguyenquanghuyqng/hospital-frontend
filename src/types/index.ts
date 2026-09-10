@@ -554,3 +554,104 @@ export interface AppointmentCreate {
   note?:            string;
   patient_note?:    string;
 }
+
+// ─── National Prescription — BYT (donthuocquocgia.vn) ────────────────────────
+
+/** Phân loại nhóm thuốc — xác định ký tự Z của mã đơn */
+export type DrugCategory = 'regular' | 'narcotic' | 'psychotropic' | 'functional_food';
+
+/** Trạng thái hành nghề của bác sĩ liên quan đến mã liên thông */
+export type LicenseStatus = 'active' | 'suspended' | 'revoked';
+
+/** Loại đơn thuốc: N=gây nghiện / H=hướng thần / C=thường */
+export type PrescriptionType = 'N' | 'H' | 'C';
+
+/** Trạng thái đẩy đơn lên hệ thống quốc gia */
+export type PrescriptionPushStatus = 'pending' | 'sending' | 'success' | 'error' | 'cancelled';
+
+/** Đơn thuốc điện tử chuẩn BYT */
+export interface PrescriptionResponse {
+  id:               number;
+  examination_id:   number;
+  patient_id:       number;
+  doctor_id:        number | null;
+
+  // Mã đơn 14 ký tự
+  prescription_code:  string | null;
+  facility_code:      string | null;
+  prescription_type:  PrescriptionType;
+  push_status:        PrescriptionPushStatus;
+
+  // Hình thức điều trị
+  is_inpatient:       boolean;
+
+  // Đợt dùng thuốc (N/H)
+  treatment_from:     string | null;
+  treatment_to:       string | null;
+
+  // BN snapshot
+  patient_phone:       string | null;
+  patient_weight_kg:   number | null;
+  patient_gender_code: 1 | 2 | 3 | null;
+  guardian_name:       string | null;
+
+  // Người nhận N/H
+  recipient_cccd:     string | null;
+  recipient_name:     string | null;
+
+  // Hệ thống quốc gia
+  national_ref_id:    string | null;
+  sent_at:            string | null;
+  sold_at:            string | null;
+
+  // Retry
+  retry_count:        number;
+  retry_at:           string | null;
+  error_log:          string | null;
+
+  // Bác sĩ snapshot
+  doctor_name:          string | null;
+  doctor_national_code: string | null;
+
+  created_at: string;
+  updated_at: string;
+}
+
+/** Cập nhật thông tin phụ trợ đơn thuốc */
+export interface PrescriptionUpdate {
+  is_inpatient?:       boolean;
+  treatment_from?:     string | null;
+  treatment_to?:       string | null;
+  patient_phone?:      string | null;
+  patient_weight_kg?:  number | null;
+  patient_gender_code?: 1 | 2 | 3 | null;
+  guardian_name?:      string | null;
+  recipient_cccd?:     string | null;
+  recipient_name?:     string | null;
+}
+
+/** Thống kê dashboard tỷ lệ gửi đơn (admin) */
+export interface PrescriptionDashboard {
+  total_today:      number;
+  pending:          number;
+  success:          number;
+  error:            number;
+  cancelled:        number;
+  success_rate_pct: number;
+  avg_retry_count:  number;
+  last_success_at:  string | null;
+  facility_code:    string | null;
+  is_facility_code_configured: boolean;
+}
+
+/** Bác sĩ với thông tin mã liên thông — dùng cho admin UI */
+export interface AdminUser {
+  id:                   number;
+  username:             string;
+  full_name:            string | null;
+  role:                 string;
+  clinic_room:          string | null;
+  is_active:            boolean;
+  national_doctor_code: string | null;
+  license_status:       LicenseStatus;
+}

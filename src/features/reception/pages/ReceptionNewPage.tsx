@@ -15,8 +15,11 @@ const schema = z.object({
   cccd:        z.string().optional(),
   full_name:   z.string().min(2, 'Họ tên tối thiểu 2 ký tự'),
   birth_year:  z.coerce.number().min(1900).max(2100).optional().or(z.literal('')),
+  date_of_birth: z.string().optional(),
   gender:      z.enum(['male', 'female', '']).optional(),
   phone:       z.string().optional(),
+  weight_kg:   z.coerce.number().positive().optional().or(z.literal('')),
+  guardian_name: z.string().optional(),
   clinic_room: z.string().min(1, 'Vui lòng chọn phòng khám'),
   subject_type: z.string().optional(),
   subject_name: z.string().optional(),
@@ -34,10 +37,28 @@ export default function ReceptionNewPage() {
   const searchAsync  = useAsync<PatientResponse>();
   const createAsync  = useAsync<unknown>();
 
-  const { register, handleSubmit, setValue, formState: { errors } } = useForm<FormValues>({
+  const { register, handleSubmit, setValue, watch, formState: { errors } } = useForm<FormValues>({
     resolver: zodResolver(schema),
     defaultValues: { priority: 0, gender: '' },
   });
+
+  const birthYear     = watch('birth_year');
+  const dateOfBirth   = watch('date_of_birth');
+
+  /** Ước tính tuổi tháng từ date_of_birth hoặc birth_year */
+  const estimatedAgeMonths = (() => {
+    if (dateOfBirth) {
+      const dob = new Date(dateOfBirth);
+      const now  = new Date();
+      return (now.getFullYear() - dob.getFullYear()) * 12 + (now.getMonth() - dob.getMonth());
+    }
+    if (birthYear) {
+      return (new Date().getFullYear() - Number(birthYear)) * 12;
+    }
+    return null;
+  })();
+
+  const isUnder72Months = estimatedAgeMonths !== null && estimatedAgeMonths < 72;
 
   // CCCD lookup
   const handleCccdSearch = async (cccd: string) => {
@@ -62,6 +83,8 @@ export default function ReceptionNewPage() {
         gender:     data.gender || undefined,
         phone:      data.phone || undefined,
         cccd:       data.cccd || undefined,
+        weight_kg:  data.weight_kg ? Number(data.weight_kg) : undefined,
+        contact_name: data.guardian_name || undefined,
       },
       clinic_room:      data.clinic_room,
       subject_type:     data.subject_type || undefined,
@@ -124,12 +147,65 @@ export default function ReceptionNewPage() {
             <Field label="Số điện thoại">
               <input {...register('phone')} className="form-input" placeholder="0912 345 678" />
             </Field>
-            {patient && (
-              <div style={{ paddingTop: 24 }}>
-                <span className="badge badge-success">✓ Bệnh nhân đã có trong hệ thống</span>
-              </div>
-            )}
+            <Field label="Ngày sinh (nếu biết chính xác)">
+              <input {...register('date_of_birth')} type="date" className="form-input"
+                onChange={e => { setValue('date_of_birth', e.target.value); }} />
+            </Field>
           </div>
+
+          {/* BYT bắt buộc: cân nặng + guardian nếu BN < 72 tháng */}
+          <div className="form-row form-row-2" style={{ marginTop: 16 }}>
+            <Field
+              label={
+                isUnder72Months
+                  ? '⚖️ Cân nặng (kg) *'
+                  : '⚖️ Cân nặng (kg)'
+              }
+              error={isUnder72Months && !watch('weight_kg') ? 'Bắt buộc với trẻ < 72 tháng tuổi' : undefined}
+            >
+              <input
+                {...register('weight_kg')}
+                type="number" step="0.1" min="0.1" className="form-input"
+                placeholder="VD: 14.5"
+                style={isUnder72Months ? { borderColor: '#f59e0b' } : {}}
+              />
+            </Field>
+            <Field
+              label={
+                isUnder72Months
+                  ? '👨‍👩‍👧 Tên bố/mẹ/người đưa trẻ *'
+                  : '👨‍👩‍👧 Tên bố/mẹ/người đưa trẻ'
+              }
+              error={isUnder72Months && !watch('guardian_name') ? 'Bắt buộc với trẻ < 72 tháng tuổi' : undefined}
+            >
+              <input
+                {...register('guardian_name')}
+                className="form-input"
+                placeholder="Họ tên bố/mẹ hoặc người đưa trẻ"
+                style={isUnder72Months ? { borderColor: '#f59e0b' } : {}}
+              />
+            </Field>
+          </div>
+          {isUnder72Months && (
+            <div style={{
+              marginTop: 8, padding: '7px 12px',
+              background: '#fffbeb', border: '1px solid #fde68a',
+              borderRadius: 7, fontSize: '.78rem', color: '#92400e',
+            }}>
+              ⚠️ Bệnh nhân dưới 72 tháng tuổi — cân nặng và tên người đưa trẻ là bắt buộc theo quy định BYT (đơn thuốc điện tử)
+            </div>
+          )}
+          {!isUnder72Months && estimatedAgeMonths === null && (
+            <div style={{ marginTop: 8, fontSize: '.75rem', color: 'var(--clr-gray-400)' }}>
+              💡 Nhập ngày sinh để hệ thống tự kiểm tra yêu cầu với trẻ nhỏ
+            </div>
+          )}
+
+          {patient && (
+            <div style={{ paddingTop: 12 }}>
+              <span className="badge badge-success">✓ Bệnh nhân đã có trong hệ thống</span>
+            </div>
+          )}
         </Card>
 
         {/* Visit info */}

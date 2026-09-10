@@ -14,6 +14,8 @@ export interface AdminUser {
   role:        string;
   clinic_room: string | null;
   is_active:   boolean;
+  national_doctor_code: string | null;
+  license_status:       string;
 }
 
 export interface UserCreatePayload {
@@ -111,4 +113,11 @@ export const adminApi = {
 
   getRecordAudit: (table_name: string, record_id: number) =>
     apiClient.get<AuditLog[]>('/admin/audit-logs/record', { params: { table_name, record_id } }),
+
+  // License management
+  updateLicense: (userId: number, data: { national_doctor_code?: string | null; license_status?: string }) =>
+    apiClient.patch<AdminUser>(`/admin/users/${userId}/license`, data),
+
+  listDoctorLicenseStatus: (params?: { license_status?: string; has_code?: boolean }) =>
+    apiClient.get<AdminUser[]>('/admin/users/doctors/license-status', { params }),
 };

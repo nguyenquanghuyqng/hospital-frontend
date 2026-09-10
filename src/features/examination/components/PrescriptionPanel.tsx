@@ -2,6 +2,7 @@
  * PrescriptionPanel — Đơn thuốc.
  * Hiển thị 2 nhóm: Thuốc BHYT và Thuốc ngoài BHYT.
  * Tích hợp cảnh báo tương tác / trùng hoạt chất thuốc real-time.
+ * Tích hợp PrescriptionStatusCard: mã đơn BYT 14 ký tự, push status, QR code.
  */
 import { useState, useEffect, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
@@ -12,7 +13,8 @@ import { examinationApi } from '@api/examination.api';
 import { clinicalApi } from '@api/clinical.api';
 import { useAsync } from '@hooks/useAsync';
 import { Button, Field, EmptyState, Badge } from '@components/ui';
-import type { PrescriptionItemResponse, DrugWarning } from '@/types';
+import type { PrescriptionItemResponse, DrugWarning, ExaminationStatus } from '@/types';
+import PrescriptionStatusCard from './PrescriptionStatusCard';
 
 // ── Schema ────────────────────────────────────────────────────────────────────
 
@@ -47,11 +49,13 @@ interface Props {
   items:     PrescriptionItemResponse[];
   disabled:  boolean;
   onChanged: () => void;
+  /** Trạng thái phiếu khám — dùng để hiện PrescriptionStatusCard */
+  examStatus?: ExaminationStatus;
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
 
-export default function PrescriptionPanel({ examId, items, disabled, onChanged }: Props) {
+export default function PrescriptionPanel({ examId, items, disabled, onChanged, examStatus }: Props) {
   const [adding,      setAdding]   = useState(false);
   const [activeGroup, setActiveGroup] = useState<'bhyt' | 'ngoai_bhyt'>('bhyt');
   const [warnings,    setWarnings] = useState<DrugWarning[]>([]);
@@ -135,6 +139,13 @@ export default function PrescriptionPanel({ examId, items, disabled, onChanged }
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+      {/* ── BYT Prescription status card ──────────────────────────────────── */}
+      <PrescriptionStatusCard
+        examinationId={examId}
+        isCompleted={examStatus === 'completed'}
+        onUpdated={onChanged}
+      />
 
       {/* ── Drug interaction warnings ──────────────────────────────────────── */}
       {warnings.length > 0 && showWarnings && (
