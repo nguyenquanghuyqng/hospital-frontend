@@ -454,11 +454,11 @@ export default function ExaminationForm({ exam, disabled, onUpdated }: Props) {
       >
         <textarea
           className="form-input"
-          rows={7}
+          rows={1}
           value={clinicalSymptoms}
           disabled={disabled}
           placeholder="Mô tả chi tiết triệu chứng, dấu hiệu lâm sàng, lý do vào khám, tiền sử bệnh liên quan..."
-          style={{ resize: 'vertical', minHeight: 140, lineHeight: 1.7 }}
+          style={{ resize: 'vertical', minHeight: 72, lineHeight: 1.7 }}
           onChange={e => setClinicalSymptoms(e.target.value)}
           onBlur={e => {
             if (e.target.value !== (exam.clinical_symptoms ?? ''))

@@ -293,7 +293,7 @@ export default function ExamInfoSection({ exam, disabled, onUpdated }: Props) {
       {/* ── Biến chứng ──────────────────────────────────────────────── */}
       <div>
         <label style={LBL}>Biến chứng</label>
-        <textarea className="form-input" rows={3}
+        <textarea className="form-input" rows={1}
           value={complications} disabled={disabled}
           placeholder="Ghi nhận biến chứng nếu có..."
           style={{ resize: 'vertical' }}
